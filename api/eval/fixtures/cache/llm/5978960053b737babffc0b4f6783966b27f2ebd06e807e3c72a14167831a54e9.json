@@ -1,9 +1,0 @@
-{
- "text": "{\n  \"sql\": \"SELECT name FROM category ORDER BY name ASC\",\n  \"explanation\": \"This query retrieves the names of all film categories sorted in alphabetical order.\",\n  \"chart_hint\": \"table\"\n}",
- "usage": {
-  "prompt_tokens": 988,
-  "completion_tokens": 48,
-  "total_tokens": 1036
- },
- "model": "gemini-3.5-flash-lite"
-}

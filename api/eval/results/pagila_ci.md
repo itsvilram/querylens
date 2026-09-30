@@ -1,7 +1,7 @@
 # Eval run `pagila_ci`
 
 - Dataset: pagila_ci, 5 questions; model: gemini-3.5-flash-lite
-- Options: {'schema': 'full', 'correction': False, 'fewshot': False, 'evidence': True}
+- Options: {'schema': 'full', 'k': None, 'correction': False, 'fewshot': False, 'evidence': True}
 - **Execution accuracy: 5/5 = 100.0%** (95% interval 56.5% to 100.0%)
 - Strict (same order): 5/5
 
@@ -14,4 +14,4 @@
 |---|---|
 | correct | 5 |
 
-Tokens per question: prompt 989 (max 993), total 1051. LLM latency p50/p95: 4150/4563 ms (5 live calls).
+Tokens per question: prompt 1007 (max 1011), total 1068. LLM latency p50/p95: 4229/4366 ms (5 live calls).

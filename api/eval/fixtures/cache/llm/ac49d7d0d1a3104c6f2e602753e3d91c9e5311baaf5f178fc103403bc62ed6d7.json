@@ -1,0 +1,9 @@
+{
+ "text": "{\n  \"sql\": \"SELECT COUNT(*) FROM film\",\n  \"explanation\": \"Counts the total number of films in the film table.\",\n  \"chart_hint\": \"number\"\n}",
+ "usage": {
+  "prompt_tokens": 1001,
+  "completion_tokens": 42,
+  "total_tokens": 1043
+ },
+ "model": "gemini-3.5-flash-lite"
+}

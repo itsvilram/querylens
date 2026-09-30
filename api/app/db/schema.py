@@ -37,12 +37,15 @@ WHERE n.nspname = 'public' AND c.relname = ANY ($1::text[])
 ORDER BY c.relname, a.attnum
 """
 
+# Partitioned tables (Pagila's payment) keep their foreign keys on each partition
+# (payment_p2022_01, ...), not on the parent. pg_partition_root() credits them to
+# the parent, and DISTINCT folds the 55 identical copies into one.
 _FOREIGN_KEYS = """
-SELECT src.relname AS table_name, a.attname AS column_name,
+SELECT DISTINCT src.relname AS table_name, a.attname AS column_name, dst.relname AS ref_table,
        quote_ident(dst.relname) || '.' || quote_ident(fa.attname) AS reference_sql
 FROM pg_constraint k
-JOIN pg_class src ON src.oid = k.conrelid
-JOIN pg_class dst ON dst.oid = k.confrelid
+JOIN pg_class src ON src.oid = coalesce(pg_partition_root(k.conrelid), k.conrelid)
+JOIN pg_class dst ON dst.oid = coalesce(pg_partition_root(k.confrelid), k.confrelid)
 JOIN pg_namespace n ON n.oid = src.relnamespace
 CROSS JOIN LATERAL unnest(k.conkey, k.confkey) AS cols (src_attnum, dst_attnum)
 JOIN pg_attribute a ON a.attrelid = k.conrelid AND a.attnum = cols.src_attnum
@@ -70,6 +73,20 @@ async def describe_schema(pool: asyncpg.Pool[asyncpg.Record], tables: frozenset[
         lines[col["table_name"]].append(text)
     return "\n".join(
         f"{table_sql.get(name, name)}({', '.join(cols)})" for name, cols in lines.items()
+    )
+
+
+async def foreign_key_edges(
+    pool: asyncpg.Pool[asyncpg.Record], tables: frozenset[str]
+) -> frozenset[tuple[str, str]]:
+    """Pairs of tables joined by a foreign key, e.g. ("payment", "rental")."""
+    names = sorted(t.removeprefix("public.") for t in tables)
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(_FOREIGN_KEYS, names)
+    return frozenset(
+        (row["table_name"], row["ref_table"])
+        for row in rows
+        if row["ref_table"] in names and row["ref_table"] != row["table_name"]
     )
 
 

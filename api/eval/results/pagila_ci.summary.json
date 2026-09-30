@@ -5,6 +5,7 @@
   "provider": "gemini",
   "options": {
     "schema": "full",
+    "k": null,
     "correction": false,
     "fewshot": false,
     "evidence": true
@@ -37,15 +38,15 @@
     "correct": 5
   },
   "tokens": {
-    "prompt_mean": 989,
-    "prompt_max": 993,
-    "total_mean": 1051
+    "prompt_mean": 1007,
+    "prompt_max": 1011,
+    "total_mean": 1068
   },
   "latency_ms": {
-    "llm_p50": 4150,
-    "llm_p95": 4563,
-    "db_p50": 24.8,
-    "db_p95": 43.5,
+    "llm_p50": 4229,
+    "llm_p95": 4366,
+    "db_p50": 50.2,
+    "db_p95": 62.1,
     "llm_measured": 5
   }
 }

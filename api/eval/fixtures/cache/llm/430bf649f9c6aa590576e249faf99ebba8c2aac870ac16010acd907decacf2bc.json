@@ -1,0 +1,9 @@
+{
+ "text": "{\n  \"sql\": \"SELECT l.name FROM language l JOIN film f ON l.language_id = f.language_id GROUP BY l.name ORDER BY count(*) DESC LIMIT 1\",\n  \"explanation\": \"Finds the language name associated with the highest number of films.\",\n  \"chart_hint\": \"number\"\n}",
+ "usage": {
+  "prompt_tokens": 1007,
+  "completion_tokens": 74,
+  "total_tokens": 1081
+ },
+ "model": "gemini-3.5-flash-lite"
+}

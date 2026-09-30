@@ -1,0 +1,69 @@
+# Runs on every push to main and every pull request.
+# No secrets and no LLM calls: tests use the fake LLM (later phases).
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  api:
+    name: API (lint, types, tests)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: api
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10
+        with:
+          version: "0.12.21"
+          enable-cache: true
+      - run: uv sync --locked
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+      - run: uv run mypy app tests
+      - run: uv run pytest
+
+  web:
+    name: Web (lint, types, tests, build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run format:check
+      - run: npm run type-check
+      - run: npm test
+      - run: npm run build-only
+
+  db:
+    name: Database image (Pagila + read-only role)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - run: docker compose up -d --build --wait --wait-timeout 300 db
+      - name: ro_user can read but not write
+        run: |
+          ro() { docker compose exec -T -e PGPASSWORD=ro_user_dev db \
+                 psql -h 127.0.0.1 -U ro_user -d pagila -X -tA -c "$1"; }
+          test "$(ro 'SELECT count(*) > 50000 FROM rental')" = "t"
+          if ro "INSERT INTO category (name) VALUES ('x')"; then
+            echo "ro_user could write!"; exit 1
+          fi

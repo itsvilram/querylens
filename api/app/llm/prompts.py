@@ -8,6 +8,7 @@ The rules are not a security layer: the validator and the database are. They
 only help the model write good SQL and decline politely.
 """
 
+import hashlib
 from dataclasses import dataclass
 
 from app.llm.base import Message
@@ -36,6 +37,10 @@ Answer as JSON with:
 - "chart_hint": "line" for values over time, "bar" to compare categories,
   "number" for a single value, otherwise "table".
 """
+
+
+# Part of the answer-cache key: editing the rules starts a fresh cache by itself.
+PROMPT_VERSION = hashlib.sha256(RULES.encode()).hexdigest()[:12]
 
 
 @dataclass(frozen=True)

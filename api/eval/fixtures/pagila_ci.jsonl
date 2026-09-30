@@ -1,0 +1,5 @@
+{"question_id": 1, "db_id": "pagila", "question": "How many films are there?", "evidence": "", "gold_sql": "SELECT count(*) FROM film", "difficulty": "simple"}
+{"question_id": 2, "db_id": "pagila", "question": "List the names of all film categories in alphabetical order.", "evidence": "", "gold_sql": "SELECT name FROM category ORDER BY name", "difficulty": "simple"}
+{"question_id": 3, "db_id": "pagila", "question": "What was the total amount of all payments made in 2024?", "evidence": "", "gold_sql": "SELECT sum(amount) FROM payment WHERE payment_date >= '2024-01-01' AND payment_date < '2025-01-01'", "difficulty": "simple"}
+{"question_id": 4, "db_id": "pagila", "question": "Which language are most films in? Give the language name.", "evidence": "", "gold_sql": "SELECT l.name FROM film f JOIN language l ON l.language_id = f.language_id GROUP BY l.name ORDER BY count(*) DESC LIMIT 1", "difficulty": "moderate"}
+{"question_id": 5, "db_id": "pagila", "question": "How many rentals were made in March 2024?", "evidence": "", "gold_sql": "SELECT count(*) FROM rental WHERE rental_date >= '2024-03-01' AND rental_date < '2024-04-01'", "difficulty": "simple"}

@@ -56,6 +56,22 @@ async def test_schema_text_lists_allowed_tables_with_keys() -> None:
     assert len(schema_version(text)) == 12
 
 
+async def test_names_that_need_quotes_are_shown_with_quotes() -> None:
+    """Uses the BIRD eval database (local only: CI does not download BIRD)."""
+    try:
+        pool = await asyncpg.create_pool(Settings().bird_database_url.get_secret_value())
+    except (OSError, asyncpg.PostgresError):
+        pytest.skip("bird_eval not loaded (run scripts.download_bird and scripts.load_bird)")
+    try:
+        text = await describe_schema(pool, frozenset({"public.patient", "public.laboratory"}))
+    finally:
+        await pool.close()
+
+    assert '"First Date" date' in text  # a space: must be quoted
+    assert '"T-BIL" real' in text  # a dash: must be quoted
+    assert "patient(id bigint PK" in text  # plain names stay plain
+
+
 # ---------------------------------------------------------------- budget
 
 

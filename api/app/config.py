@@ -44,6 +44,10 @@ class Settings(BaseSettings):
         "postgresql://ro_user:ro_user_dev@127.0.0.1:5432/pagila"
     )
     redis_url: str = "redis://127.0.0.1:6379/0"
+    # The BIRD eval database (only the eval runner uses it; see scripts/load_bird.py).
+    bird_database_url: SecretStr = SecretStr(
+        "postgresql://bird_ro:bird_ro_dev@127.0.0.1:5432/bird_eval"
+    )
 
     # Limits for one question.
     row_cap: int = 1000

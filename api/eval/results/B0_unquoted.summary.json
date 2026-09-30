@@ -1,4 +1,4 @@
-﻿{
+{
   "name": "B0_unquoted",
   "dataset": "bird",
   "model": "gemini-3.5-flash-lite",

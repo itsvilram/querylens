@@ -1,4 +1,4 @@
-﻿# Eval run `B0_unquoted` (schema text did not quote names like "First Date"; superseded by B0)
+# Eval run `B0_unquoted` (schema text did not quote names like "First Date"; superseded by B0)
 
 - Dataset: bird, 100 questions; model: gemini-3.5-flash-lite
 - Options: {'schema': 'full', 'correction': False, 'fewshot': False, 'evidence': True}

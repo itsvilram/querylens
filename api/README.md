@@ -9,6 +9,21 @@ uv run pytest                # tests (integration tests need `docker compose up 
 uv run ruff check . && uv run ruff format --check . && uv run mypy app tests eval scripts
 ```
 
+## Endpoints
+
+- `POST /api/ask`: `{"question": "...", "session_id": "<optional chat id>"}` → one JSON answer.
+- `POST /api/ask/stream`: the same, as server-sent events: `stage` events
+  (`rewrite`, `wait`, `retrieve`, `generate`, `correct`, `execute`), then one `answer` or `error`.
+- `GET /api/stats`: answer-cache hits, misses and hit rate. `GET /api/health`: liveness.
+
+Answers are cached in Redis for a day (key: the question after the follow-up rewrite + schema,
+prompt, model and settings). Every request counts against a per-IP sliding-window limit
+(10/minute, 100/hour by default). Cache speed with the real model:
+
+```sh
+LLM_MODE=real uv run python -m scripts.measure_cache   # → eval/results/cache_latency.json
+```
+
 ## Evaluation (BIRD mini-dev)
 
 ```sh

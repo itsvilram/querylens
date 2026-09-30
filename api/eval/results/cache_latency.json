@@ -1,0 +1,35 @@
+{
+  "measured_at": "2026-09-30T13:36:48+00:00",
+  "llm_mode": "real",
+  "model": "gemini-3.5-flash-lite",
+  "hits_per_question": 5,
+  "median_miss_ms": 1387.1,
+  "median_hit_ms": 4.9,
+  "questions": [
+    {
+      "question": "Which film categories made the most money in 2024?",
+      "miss_ms": 1709.8,
+      "hit_ms_median": 4.1
+    },
+    {
+      "question": "How many rentals were there each month in 2024?",
+      "miss_ms": 1387.1,
+      "hit_ms_median": 7.6
+    },
+    {
+      "question": "How many films are there?",
+      "miss_ms": 1086.5,
+      "hit_ms_median": 5.7
+    },
+    {
+      "question": "Which 10 customers spent the most?",
+      "miss_ms": 1394.2,
+      "hit_ms_median": 4.9
+    },
+    {
+      "question": "Which actors appear in the most films?",
+      "miss_ms": 1310.3,
+      "hit_ms_median": 4.8
+    }
+  ]
+}

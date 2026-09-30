@@ -4,6 +4,11 @@ We read pg_catalog, not information_schema: information_schema hides foreign key
 from roles that don't own the tables, and ro_user owns nothing. These are our own
 fixed queries, not generated SQL, so the validator's function rules don't apply.
 
+Names are written exactly as SQL needs them: Postgres' own quote_ident() adds
+double quotes only when a name has spaces, capitals, symbols or is a reserved
+word (e.g. "Free Meal Count (K-12)", "order"). Printed raw, `first date` would
+look like a column `first` of type `date`.
+
 Output, one line per table (compact, to save prompt tokens):
     film(film_id integer PK, title text, language_id smallint -> language.language_id, ...)
 """
@@ -16,7 +21,9 @@ import asyncpg
 
 _COLUMNS = """
 SELECT c.relname AS table_name,
+       quote_ident(c.relname) AS table_sql,
        a.attname AS column_name,
+       quote_ident(a.attname) AS column_sql,
        format_type(a.atttypid, a.atttypmod) AS data_type,
        EXISTS (
            SELECT 1 FROM pg_constraint k
@@ -32,7 +39,7 @@ ORDER BY c.relname, a.attnum
 
 _FOREIGN_KEYS = """
 SELECT src.relname AS table_name, a.attname AS column_name,
-       dst.relname AS ref_table, fa.attname AS ref_column
+       quote_ident(dst.relname) || '.' || quote_ident(fa.attname) AS reference_sql
 FROM pg_constraint k
 JOIN pg_class src ON src.oid = k.conrelid
 JOIN pg_class dst ON dst.oid = k.confrelid
@@ -50,20 +57,20 @@ async def describe_schema(pool: asyncpg.Pool[asyncpg.Record], tables: frozenset[
         columns = await conn.fetch(_COLUMNS, names)
         foreign_keys = await conn.fetch(_FOREIGN_KEYS, names)
 
-    references = {
-        (fk["table_name"], fk["column_name"]): f"{fk['ref_table']}.{fk['ref_column']}"
-        for fk in foreign_keys
-    }
+    references = {(fk["table_name"], fk["column_name"]): fk["reference_sql"] for fk in foreign_keys}
+    table_sql = {col["table_name"]: col["table_sql"] for col in columns}
     lines: dict[str, list[str]] = {name: [] for name in names}
     for col in columns:
-        text = f"{col['column_name']} {col['data_type']}"
+        text = f"{col['column_sql']} {col['data_type']}"
         if col["is_primary_key"]:
             text += " PK"
         ref = references.get((col["table_name"], col["column_name"]))
         if ref:
             text += f" -> {ref}"
         lines[col["table_name"]].append(text)
-    return "\n".join(f"{name}({', '.join(cols)})" for name, cols in lines.items())
+    return "\n".join(
+        f"{table_sql.get(name, name)}({', '.join(cols)})" for name, cols in lines.items()
+    )
 
 
 def schema_version(schema_text: str) -> str:

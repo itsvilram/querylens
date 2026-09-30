@@ -32,13 +32,14 @@ from app.db.allowlist import PAGILA_TABLES
 from app.db.schema import describe_schema, foreign_key_edges
 from app.embed.base import Embedder
 from app.embed.fastembed_impl import FastEmbedder
-from app.llm.base import LLMRateLimited, Message, Usage
+from app.llm.base import Completion, LLMRateLimited, Message
 from app.llm.openai_compat import OpenAICompatibleClient
 from app.llm.prompts import build_messages
+from app.pipeline.correct import MAX_RETRIES, Outcome, answer_with_correction
 from app.pipeline.execute import ExecutionError, run_readonly
-from app.pipeline.generate import ANSWER_SCHEMA, GenerationError, generate_sql
+from app.pipeline.generate import GenerationError
 from app.pipeline.retrieve import connect_tables, search_tables
-from app.pipeline.validate import SqlPolicy, SqlRejected, ValidatedSql, validate_sql
+from app.pipeline.validate import SqlPolicy, SqlRejected, ValidatedSql
 from eval.cache import CachedLLM
 from eval.dataset import REPO, Question, bird_tables, load_bird_subset, load_pagila_ci
 from eval.fewshot import PAGILA_EXAMPLES
@@ -79,6 +80,8 @@ class Record:
     llm_ms: float | None  # None when the reply came from the cache
     db_ms: float | None
     tables_sent: int | None = None  # tables in the prompt (full schema: all of them)
+    first_error: str = ""  # what went wrong on the first try ("" = nothing)
+    llm_calls: int | None = None  # 1 + the correction retries
 
 
 # ---------------------------------------------------------------- helpers
@@ -121,18 +124,44 @@ class Pacer:
         self._last = time.monotonic()
 
 
-async def ask_model(llm: CachedLLM, messages: list[Message], pacer: Pacer) -> Any:
-    """generate_sql, with pacing for network calls and patience for rate limits."""
-    for attempt in range(4):
-        if not llm.is_cached(messages, ANSWER_SCHEMA):
-            await pacer.wait()
-        try:
-            return await generate_sql(llm, messages)
-        except LLMRateLimited as error:
-            if attempt == 3:
-                raise StopRun from error
-            await asyncio.sleep(error.retry_after_s or 60)
-    raise AssertionError("unreachable")
+class PacedLLM:
+    """Wraps the cached client: paces live calls, waits out per-minute limits,
+    and stops the run (StopRun) when the limit keeps coming back (daily limit).
+    Like BudgetedLLM in the app, it is an LLMClient, so the shared correction
+    loop uses it without knowing about pacing."""
+
+    def __init__(self, inner: CachedLLM, pacer: Pacer) -> None:
+        self._inner = inner
+        self._pacer = pacer
+        self.model = inner.model
+        self.live_ms = 0.0  # time spent in live (uncached) calls
+        self.live_calls = 0
+
+    async def complete(
+        self, messages: list[Message], *, json_schema: dict[str, Any], schema_name: str
+    ) -> Completion:
+        for attempt in range(4):
+            live = not self._inner.is_cached(messages, json_schema)
+            if live:
+                await self._pacer.wait()
+            started = time.perf_counter()
+            try:
+                completion = await self._inner.complete(
+                    messages, json_schema=json_schema, schema_name=schema_name
+                )
+            except LLMRateLimited as error:
+                if attempt == 3:
+                    raise StopRun from error
+                await asyncio.sleep(error.retry_after_s or 60)
+                continue
+            if live:
+                self.live_ms += (time.perf_counter() - started) * 1000
+                self.live_calls += 1
+            return completion
+        raise AssertionError("unreachable")  # the loop returns or raises
+
+    async def aclose(self) -> None:
+        await self._inner.aclose()
 
 
 # ---------------------------------------------------------------- one question
@@ -141,8 +170,7 @@ async def ask_model(llm: CachedLLM, messages: list[Message], pacer: Pacer) -> An
 async def score(
     q: Question,
     *,
-    llm: CachedLLM,
-    pacer: Pacer,
+    llm: PacedLLM,
     pool: asyncpg.Pool[asyncpg.Record],
     schema_text: str,
     tables_sent: int,
@@ -150,66 +178,67 @@ async def score(
     options: argparse.Namespace,
     cache_dir: Path,
 ) -> Record:
+    """Answer one question with the app's correction loop, then compare with gold."""
     messages = build_messages(
         q.question,
         schema_text=schema_text,
         examples=PAGILA_EXAMPLES if options.fewshot else None,
         hint=q.evidence if options.evidence and q.evidence else None,
     )
-    was_cached = llm.is_cached(messages, ANSWER_SCHEMA)
-    usage = Usage(0, 0, 0)
-    llm_ms: float | None = None
+    live_before, ms_before = llm.live_calls, llm.live_ms
+    outcome = await answer_with_correction(
+        llm,
+        messages,
+        policy=SqlPolicy(tables, row_cap=EVAL_ROW_CAP),
+        pool=pool,
+        timeout_ms=PRED_TIMEOUT_MS,
+        max_retries=MAX_RETRIES if options.correction else 0,
+    )
 
-    def record(
-        status: str,
-        detail: str = "",
-        sql: str = "",
-        strict: bool = False,
-        db_ms: float | None = None,
-    ) -> Record:
-        return Record(
-            question_id=q.question_id,
-            db_id=q.db_id,
-            difficulty=q.difficulty,
-            status=status,
-            correct=status == "correct",
-            strict=strict,
-            detail=detail[:300],
-            predicted_sql=sql,
-            prompt_tokens=usage.prompt_tokens,
-            completion_tokens=usage.completion_tokens,
-            total_tokens=usage.total_tokens,
-            llm_ms=llm_ms,
-            db_ms=db_ms,
-            tables_sent=tables_sent,
-        )
+    status, detail, strict = _status(outcome)
+    if status == "ok" and outcome.result is not None:
+        predicted = rows_as_tuples(outcome.result.rows)
+        gold = await gold_rows(pool, q, cache_dir)
+        status = "correct" if execution_match(predicted, gold) else "wrong"
+        strict = strict_match(predicted, gold)
 
-    started = time.perf_counter()
-    try:
-        generation = await ask_model(llm, messages, pacer)
-    except GenerationError as error:
-        usage = error.usage
-        return record("bad_json", error.detail)
-    usage = generation.usage
-    llm_ms = None if was_cached else (time.perf_counter() - started) * 1000
+    calls = len(outcome.attempts) + (0 if outcome.failure else 1)
+    return Record(
+        question_id=q.question_id,
+        db_id=q.db_id,
+        difficulty=q.difficulty,
+        status=status,
+        correct=status == "correct",
+        strict=strict,
+        detail=detail[:300],
+        predicted_sql=outcome.validated.sql if outcome.validated else _last_sql(outcome),
+        prompt_tokens=outcome.usage.prompt_tokens,
+        completion_tokens=outcome.usage.completion_tokens,
+        total_tokens=outcome.usage.total_tokens,
+        llm_ms=(llm.live_ms - ms_before) if llm.live_calls > live_before else None,
+        db_ms=outcome.result.elapsed_ms if outcome.result else None,
+        tables_sent=tables_sent,
+        first_error=outcome.attempts[0].error_code if outcome.attempts else "",
+        llm_calls=calls,
+    )
 
-    sql = generation.answer.sql
-    if not sql.strip():
-        return record("declined", generation.answer.explanation)
-    try:
-        validated = validate_sql(sql, SqlPolicy(tables, row_cap=EVAL_ROW_CAP))
-    except SqlRejected as error:
-        return record("blocked", f"{error.code}: {error.detail}", sql)
-    try:
-        result = await run_readonly(pool, validated, timeout_ms=PRED_TIMEOUT_MS)
-    except ExecutionError as error:
-        status = "timeout" if error.code == "timeout" else "db_error"
-        return record(status, error.detail, validated.sql)
 
-    predicted = rows_as_tuples(result.rows)
-    gold = await gold_rows(pool, q, cache_dir)
-    status = "correct" if execution_match(predicted, gold) else "wrong"
-    return record(status, "", validated.sql, strict_match(predicted, gold), result.elapsed_ms)
+def _status(outcome: Outcome) -> tuple[str, str, bool]:
+    """(status, detail, strict) for anything but a result to compare ("ok")."""
+    failure = outcome.failure
+    if isinstance(failure, GenerationError):
+        return "bad_json", failure.detail, False
+    if isinstance(failure, SqlRejected):
+        return "blocked", f"{failure.code}: {failure.detail}", False
+    if isinstance(failure, ExecutionError):
+        return ("timeout" if failure.code == "timeout" else "db_error"), failure.detail, False
+    if outcome.declined and outcome.generation is not None:
+        return "declined", outcome.generation.answer.explanation, False
+    return "ok", "", False
+
+
+def _last_sql(outcome: Outcome) -> str:
+    return outcome.attempts[-1].sql if outcome.attempts else ""
 
 
 # ---------------------------------------------------------------- summary
@@ -255,6 +284,13 @@ def summarize(records: list[Record], meta: dict[str, Any]) -> dict[str, Any]:
             "db_p95": round(percentile(db_times, 95), 1),
             "llm_measured": len(llm_times),
         },
+        "correction": {
+            # first try failed with an error (bad JSON, blocked, DB error, timeout)
+            "first_try_failed": sum(1 for r in records if r.first_error),
+            # ... and the final answer was correct anyway
+            "rescued": sum(1 for r in records if r.first_error and r.correct),
+            "retries": sum((r.llm_calls or 1) - 1 for r in records),
+        },
     }
 
 
@@ -283,6 +319,12 @@ def as_markdown(summary: dict[str, Any]) -> str:
         f" total {tokens['total_mean']}. LLM latency p50/p95: {latency['llm_p50']}"
         f"/{latency['llm_p95']} ms ({latency['llm_measured']} live calls).",
     ]
+    fix = summary.get("correction")
+    if fix and summary["options"].get("correction"):
+        lines.append(
+            f"Self-correction: first try failed on {fix['first_try_failed']} questions,"
+            f" {fix['rescued']} rescued, {fix['retries']} retries in total."
+        )
     return "\n".join(lines) + "\n"
 
 
@@ -299,6 +341,10 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--model", default="gemini-3.5-flash-lite")
     parser.add_argument("--llm", choices=["real", "replay"], default="real")
     parser.add_argument("--schema", choices=["full", "retrieved"], default="full")
+    parser.add_argument(
+        "--correction", action=argparse.BooleanOptionalAction, default=False,
+        help=f"send failed SQL back to the model, up to {MAX_RETRIES} retries",
+    )  # fmt: skip
     parser.add_argument("--k", type=int, default=4, help="tables to retrieve (--schema retrieved)")
     parser.add_argument("--fewshot", action=argparse.BooleanOptionalAction, default=False)
     parser.add_argument("--evidence", action=argparse.BooleanOptionalAction, default=True)
@@ -322,7 +368,10 @@ async def main(options: argparse.Namespace) -> int:
     fewshot = "fewshot" if options.fewshot else "nofewshot"
     evidence = "evidence" if options.evidence else "noevidence"
     schema = options.schema if options.schema == "full" else f"retrieved{options.k}"
-    name = options.name or f"{options.dataset}_{options.model}_{schema}_{fewshot}_{evidence}"
+    correction = "correction" if options.correction else "nocorrection"
+    name = options.name or (
+        f"{options.dataset}_{options.model}_{schema}_{correction}_{fewshot}_{evidence}"
+    )
     identity = {
         "provider": options.provider,
         "model": options.model,
@@ -342,8 +391,8 @@ async def main(options: argparse.Namespace) -> int:
             reasoning_effort="low",
             timeout_s=120,
         )
-    llm = CachedLLM(inner, cache_dir / "llm", identity)
-    pacer = Pacer(REQUESTS_PER_MINUTE.get(options.model, 10))
+    cached = CachedLLM(inner, cache_dir / "llm", identity)
+    llm = PacedLLM(cached, Pacer(REQUESTS_PER_MINUTE.get(options.model, 10)))
 
     results_path = options.results_dir / f"{name}.jsonl"
     options.results_dir.mkdir(parents=True, exist_ok=True)
@@ -384,7 +433,6 @@ async def main(options: argparse.Namespace) -> int:
                     record = await score(
                         q,
                         llm=llm,
-                        pacer=pacer,
                         pool=pool,
                         schema_text=schema_text,
                         tables_sent=tables_sent,
@@ -420,7 +468,7 @@ async def main(options: argparse.Namespace) -> int:
         "options": {
             "schema": options.schema,
             "k": options.k if options.schema == "retrieved" else None,
-            "correction": False,
+            "correction": options.correction,
             "fewshot": options.fewshot,
             "evidence": options.evidence,
         },
@@ -433,7 +481,7 @@ async def main(options: argparse.Namespace) -> int:
     )
     (options.results_dir / f"{name}.md").write_text(as_markdown(summary), "utf-8")
     print("\n" + as_markdown(summary))
-    print(f"cache: {llm.hits} replayed, {llm.misses} live calls")
+    print(f"cache: {cached.hits} replayed, {cached.misses} live calls")
 
     if options.expect:
         expected = json.loads(options.expect.read_text("utf-8"))

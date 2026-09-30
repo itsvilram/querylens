@@ -65,6 +65,10 @@ class Settings(BaseSettings):
     # Self-correction: how many times a failed query goes back to the model (0 = off).
     correction_retries: int = 2
 
+    # Chat history for follow-up questions (kept in Redis).
+    conversation_ttl_s: int = 3600  # a chat is forgotten after an hour without questions
+    conversation_max_turns: int = 5  # only the newest turns help the rewrite
+
     # Limits for one question.
     row_cap: int = 1000
     query_timeout_ms: int = 5000

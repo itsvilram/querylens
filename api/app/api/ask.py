@@ -24,6 +24,9 @@ router = APIRouter(tags=["ask"])
 
 class AskRequest(BaseModel):
     question: str = Field(min_length=1, max_length=500)
+    # One id per chat, made by the browser (a UUID). With it, follow-ups like
+    # "only for store 2" are understood from the earlier questions.
+    session_id: str | None = Field(default=None, pattern=r"^[A-Za-z0-9-]{16,64}$")
 
 
 class ColumnOut(BaseModel):
@@ -33,6 +36,7 @@ class ColumnOut(BaseModel):
 
 class AskResponse(BaseModel):
     question: str
+    standalone_question: str  # how a follow-up was understood (= question if no rewrite)
     sql: str  # "" when the model declined to write SQL
     explanation: str
     chart_hint: Literal["line", "bar", "number", "table"]
@@ -56,7 +60,7 @@ async def ask(
 ) -> AskResponse:
     rid = request_id(request)
     try:
-        answer = await answer_question(body.question, deps)
+        answer = await answer_question(body.question, deps, body.session_id)
     except BudgetExceeded as error:
         raise PublicError(
             503, "daily_budget_used", "Today's AI budget is used up. Please try again tomorrow."
@@ -101,6 +105,7 @@ async def ask(
     result = answer.result
     return AskResponse(
         question=body.question,
+        standalone_question=answer.standalone_question,
         sql=answer.validated.sql if answer.validated else "",
         explanation=generated.explanation,
         chart_hint=generated.chart_hint,

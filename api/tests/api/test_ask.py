@@ -3,6 +3,7 @@
 Needs `docker compose up -d db redis`.
 """
 
+import uuid
 from collections.abc import Iterator
 from contextlib import AbstractContextManager, contextmanager
 
@@ -13,7 +14,7 @@ from pydantic import SecretStr
 
 from app.config import Settings
 from app.llm.base import LLMClient
-from app.llm.fake import DEMO_ANSWERS, FakeLLM, fake_answer
+from app.llm.fake import DEMO_ANSWERS, STORE_2_QUESTION, FakeLLM, fake_answer
 from app.llm.openai_compat import OpenAICompatibleClient
 from app.main import create_app
 
@@ -40,8 +41,13 @@ def api() -> Iterator[TestClient]:
         yield client
 
 
-def ask(client: TestClient, question: str) -> httpx2.Response:
-    return client.post("/api/ask", json={"question": question})
+def ask(client: TestClient, question: str, session_id: str | None = None) -> httpx2.Response:
+    body = {"question": question} | ({"session_id": session_id} if session_id else {})
+    return client.post("/api/ask", json=body)
+
+
+def new_chat() -> str:
+    return str(uuid.uuid4())  # what the browser sends: one random id per chat
 
 
 def scripted(sql: str) -> AbstractContextManager[TestClient]:
@@ -80,6 +86,74 @@ def test_off_topic_question_gets_a_polite_answer_without_sql(api: TestClient) ->
     assert body["sql"] == ""
     assert body["rows"] == []
     assert "only knows a few demo questions" in body["explanation"]
+
+
+# ---------------------------------------------------------------- follow-up questions
+
+FIRST = "Which film categories made the most money in 2024?"
+FOLLOW_UP = "Only for store 2"
+
+
+def test_follow_up_is_understood_from_the_chat(api: TestClient) -> None:
+    chat = new_chat()
+    first = ask(api, FIRST, chat).json()
+    follow = ask(api, FOLLOW_UP, chat)
+
+    assert first["standalone_question"] == FIRST  # a first question is not rewritten
+    assert follow.status_code == 200, follow.text
+    body = follow.json()
+    assert body["question"] == FOLLOW_UP
+    assert body["standalone_question"] == STORE_2_QUESTION
+    assert "store_id = 2" in body["sql"]
+    assert body["rows"]
+
+
+def test_follow_up_tokens_include_the_rewrite(api: TestClient) -> None:
+    chat = new_chat()
+    ask(api, FIRST, chat)
+
+    via_follow_up = ask(api, FOLLOW_UP, chat).json()["tokens"]
+    asked_directly = ask(api, STORE_2_QUESTION).json()["tokens"]
+
+    assert via_follow_up > asked_directly
+
+
+def test_without_a_chat_a_follow_up_is_taken_as_typed() -> None:
+    llm = FakeLLM()
+    with client_for(llm) as client:
+        ask(client, FIRST)
+        body = ask(client, FOLLOW_UP).json()
+
+        assert body["standalone_question"] == FOLLOW_UP
+        assert body["sql"] == ""  # alone, "only for store 2" can't be answered
+        assert len(llm.calls) == 2  # no rewrite call
+
+
+def test_chats_do_not_share_history() -> None:
+    llm = FakeLLM()
+    with client_for(llm) as client:
+        ask(client, FIRST, new_chat())
+        body = ask(client, FOLLOW_UP, new_chat()).json()
+
+        assert body["standalone_question"] == FOLLOW_UP
+        assert len(llm.calls) == 2  # the second chat had no history, so no rewrite
+
+
+def test_unanswered_questions_are_not_kept_as_history() -> None:
+    llm = FakeLLM()
+    with client_for(llm) as client:
+        chat = new_chat()
+        ask(client, "What is the weather in Delhi?", chat)  # declined: no SQL
+        ask(client, FOLLOW_UP, chat)
+
+        assert len(llm.calls) == 2  # nothing to rewrite from
+
+
+@pytest.mark.parametrize(
+    "bad_id", ["short", "x" * 65, "../../etc/passwd-aaaa", "a b c d e f g h i"]
+)
+def test_session_id_format_is_checked(api: TestClient, bad_id: str) -> None:
+    assert ask(api, FIRST, bad_id).status_code == 422
 
 
 # ---------------------------------------- prompt injection: the model was tricked

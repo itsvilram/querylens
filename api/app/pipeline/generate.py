@@ -25,7 +25,7 @@ ANSWER_SCHEMA = GeneratedAnswer.model_json_schema()
 _CODE_FENCE = re.compile(r"^\s*```(?:json)?\s*(.*?)\s*```\s*$", re.DOTALL)
 
 
-def _strip_code_fence(text: str) -> str:
+def strip_code_fence(text: str) -> str:
     match = _CODE_FENCE.match(text)
     return match.group(1) if match else text
 
@@ -56,7 +56,7 @@ class GenerationError(Exception):
 async def generate_sql(llm: LLMClient, messages: list[Message]) -> Generation:
     completion = await llm.complete(messages, json_schema=ANSWER_SCHEMA, schema_name="sql_answer")
     try:
-        answer = GeneratedAnswer.model_validate_json(_strip_code_fence(completion.text))
+        answer = GeneratedAnswer.model_validate_json(strip_code_fence(completion.text))
     except ValidationError as error:
         problems = "; ".join(
             f"{'.'.join(map(str, e['loc'])) or 'reply'}: {e['msg']}" for e in error.errors()

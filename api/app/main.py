@@ -26,6 +26,7 @@ from app.llm.factory import build_llm
 from app.pipeline.orchestrator import PipelineDeps
 from app.pipeline.retrieve import Retriever
 from app.store.budget import TokenBudget
+from app.store.conversations import ConversationStore
 
 
 def create_app(
@@ -69,6 +70,11 @@ def create_app(
                 llm=client,
                 pool=pool,
                 budget=TokenBudget(redis, config.daily_token_budget),
+                conversations=ConversationStore(
+                    redis,
+                    ttl_s=config.conversation_ttl_s,
+                    max_turns=config.conversation_max_turns,
+                ),
                 schema_text=await describe_schema(pool, PAGILA_TABLES),
                 retriever=retriever,
             )

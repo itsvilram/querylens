@@ -1,1 +1,1 @@
-"""Redis-backed state: token budget (and later cache, rate limits, conversations)."""
+"""Redis-backed state: token budget, conversations (and later cache, rate limits)."""

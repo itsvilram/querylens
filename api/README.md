@@ -17,6 +17,15 @@ uv run python -m scripts.load_bird       # loads it into the bird_eval database 
 uv run python -m eval.run --name B0      # 100 questions; replies are cached in data/eval_cache/
 ```
 
+Schema retrieval (RAG):
+
+```sh
+uv run python -m scripts.index_schema    # embed table/column descriptions into app.schema_docs
+uv run python -m eval.retrieval          # recall vs the gold SQL's tables (no LLM calls)
+uv run python -m eval.run --name B0R --schema retrieved --k 4
+uv run python -m eval.compare B0 B0R     # question by question: fixed, broken, p-value
+```
+
 A run stopped by the daily API limit resumes where it stopped: run the same command again.
 Results: `eval/results/<name>.md` (summary) and `.jsonl` (one line per question).
 BIRD mini-dev is CC BY-SA 4.0: it is downloaded, never committed. Only question ids are

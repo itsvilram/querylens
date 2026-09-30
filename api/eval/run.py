@@ -29,12 +29,15 @@ import asyncpg
 from app.api.serialize import JsonValue, to_json_value
 from app.config import PROVIDER_BASE_URLS, Settings
 from app.db.allowlist import PAGILA_TABLES
-from app.db.schema import describe_schema
+from app.db.schema import describe_schema, foreign_key_edges
+from app.embed.base import Embedder
+from app.embed.fastembed_impl import FastEmbedder
 from app.llm.base import LLMRateLimited, Message, Usage
 from app.llm.openai_compat import OpenAICompatibleClient
 from app.llm.prompts import build_messages
 from app.pipeline.execute import ExecutionError, run_readonly
 from app.pipeline.generate import ANSWER_SCHEMA, GenerationError, generate_sql
+from app.pipeline.retrieve import connect_tables, search_tables
 from app.pipeline.validate import SqlPolicy, SqlRejected, ValidatedSql, validate_sql
 from eval.cache import CachedLLM
 from eval.dataset import REPO, Question, bird_tables, load_bird_subset, load_pagila_ci
@@ -75,6 +78,7 @@ class Record:
     total_tokens: int
     llm_ms: float | None  # None when the reply came from the cache
     db_ms: float | None
+    tables_sent: int | None = None  # tables in the prompt (full schema: all of them)
 
 
 # ---------------------------------------------------------------- helpers
@@ -141,6 +145,7 @@ async def score(
     pacer: Pacer,
     pool: asyncpg.Pool[asyncpg.Record],
     schema_text: str,
+    tables_sent: int,
     tables: frozenset[str],
     options: argparse.Namespace,
     cache_dir: Path,
@@ -176,6 +181,7 @@ async def score(
             total_tokens=usage.total_tokens,
             llm_ms=llm_ms,
             db_ms=db_ms,
+            tables_sent=tables_sent,
         )
 
     started = time.perf_counter()
@@ -292,6 +298,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--provider", choices=["gemini", "groq"], default="gemini")
     parser.add_argument("--model", default="gemini-3.5-flash-lite")
     parser.add_argument("--llm", choices=["real", "replay"], default="real")
+    parser.add_argument("--schema", choices=["full", "retrieved"], default="full")
+    parser.add_argument("--k", type=int, default=4, help="tables to retrieve (--schema retrieved)")
     parser.add_argument("--fewshot", action=argparse.BooleanOptionalAction, default=False)
     parser.add_argument("--evidence", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--limit", type=int, help="only the first N questions (for a quick try)")
@@ -313,7 +321,8 @@ async def main(options: argparse.Namespace) -> int:
     cache_dir = CACHE_DIRS[options.dataset]
     fewshot = "fewshot" if options.fewshot else "nofewshot"
     evidence = "evidence" if options.evidence else "noevidence"
-    name = options.name or f"{options.dataset}_{options.model}_{fewshot}_{evidence}"
+    schema = options.schema if options.schema == "full" else f"retrieved{options.k}"
+    name = options.name or f"{options.dataset}_{options.model}_{schema}_{fewshot}_{evidence}"
     identity = {
         "provider": options.provider,
         "model": options.model,
@@ -345,22 +354,40 @@ async def main(options: argparse.Namespace) -> int:
             done[record.question_id] = record
 
     pool = await asyncpg.create_pool(dsn, min_size=1, max_size=4)
+    app_pool: asyncpg.Pool[asyncpg.Record] | None = None
+    embedder: Embedder | None = None
+    if options.schema == "retrieved":
+        app_pool = await asyncpg.create_pool(settings.app_database_url.get_secret_value())
+        embedder = FastEmbedder(settings.embedding_model, settings.embedding_cache_dir)
     stopped = False
     try:
-        schema_texts = {
-            db: await describe_schema(pool, tables[db]) for db in {q.db_id for q in questions}
-        }
+        databases = {q.db_id for q in questions}
+        full_texts = {db: await describe_schema(pool, tables[db]) for db in databases}
+        edges = {db: await foreign_key_edges(pool, tables[db]) for db in databases}
+
+        async def prompt_schema(q: Question) -> tuple[str, int]:
+            """The schema text for this question, and how many tables it holds."""
+            if app_pool is None or embedder is None:
+                return full_texts[q.db_id], len(tables[q.db_id])
+            query = f"{q.question} {q.evidence}" if options.evidence else q.question
+            found = await search_tables(app_pool, embedder, db_id=q.db_id, text=query, k=options.k)
+            chosen = connect_tables(found, edges[q.db_id])
+            text = await describe_schema(pool, frozenset(f"public.{t}" for t in chosen))
+            return text, len(chosen)
+
         todo = [q for q in questions if q.question_id not in done]
         print(f"{name}: {len(questions)} questions, {len(done)} already done, {len(todo)} to go")
         with results_path.open("a", encoding="utf-8") as out:
             for index, q in enumerate(todo, 1):
+                schema_text, tables_sent = await prompt_schema(q)
                 try:
                     record = await score(
                         q,
                         llm=llm,
                         pacer=pacer,
                         pool=pool,
-                        schema_text=schema_texts[q.db_id],
+                        schema_text=schema_text,
+                        tables_sent=tables_sent,
                         tables=tables[q.db_id],
                         options=options,
                         cache_dir=cache_dir,
@@ -380,6 +407,8 @@ async def main(options: argparse.Namespace) -> int:
                 )
     finally:
         await pool.close()
+        if app_pool is not None:
+            await app_pool.close()
         await llm.aclose()
 
     records = [done[q.question_id] for q in questions if q.question_id in done]
@@ -389,7 +418,8 @@ async def main(options: argparse.Namespace) -> int:
         "model": options.model,
         "provider": options.provider,
         "options": {
-            "schema": "full",
+            "schema": options.schema,
+            "k": options.k if options.schema == "retrieved" else None,
             "correction": False,
             "fewshot": options.fewshot,
             "evidence": options.evidence,

@@ -1,0 +1,130 @@
+[
+  {
+    "k": 1,
+    "join_expansion": false,
+    "all_gold_tables_found": 0.2,
+    "table_recall": 0.54,
+    "tables_sent": 1.0,
+    "schema_tokens_vs_full": 0.28
+  },
+  {
+    "k": 1,
+    "join_expansion": true,
+    "all_gold_tables_found": 0.2,
+    "table_recall": 0.54,
+    "tables_sent": 1.0,
+    "schema_tokens_vs_full": 0.28
+  },
+  {
+    "k": 2,
+    "join_expansion": false,
+    "all_gold_tables_found": 0.53,
+    "table_recall": 0.779,
+    "tables_sent": 2.0,
+    "schema_tokens_vs_full": 0.454
+  },
+  {
+    "k": 2,
+    "join_expansion": true,
+    "all_gold_tables_found": 0.63,
+    "table_recall": 0.827,
+    "tables_sent": 2.26,
+    "schema_tokens_vs_full": 0.485
+  },
+  {
+    "k": 3,
+    "join_expansion": false,
+    "all_gold_tables_found": 0.75,
+    "table_recall": 0.893,
+    "tables_sent": 3.0,
+    "schema_tokens_vs_full": 0.619
+  },
+  {
+    "k": 3,
+    "join_expansion": true,
+    "all_gold_tables_found": 0.82,
+    "table_recall": 0.926,
+    "tables_sent": 3.38,
+    "schema_tokens_vs_full": 0.674
+  },
+  {
+    "k": 4,
+    "join_expansion": false,
+    "all_gold_tables_found": 0.85,
+    "table_recall": 0.938,
+    "tables_sent": 3.84,
+    "schema_tokens_vs_full": 0.732
+  },
+  {
+    "k": 4,
+    "join_expansion": true,
+    "all_gold_tables_found": 0.9,
+    "table_recall": 0.959,
+    "tables_sent": 4.2,
+    "schema_tokens_vs_full": 0.777
+  },
+  {
+    "k": 5,
+    "join_expansion": false,
+    "all_gold_tables_found": 0.9,
+    "table_recall": 0.959,
+    "tables_sent": 4.6,
+    "schema_tokens_vs_full": 0.808
+  },
+  {
+    "k": 5,
+    "join_expansion": true,
+    "all_gold_tables_found": 0.95,
+    "table_recall": 0.978,
+    "tables_sent": 4.96,
+    "schema_tokens_vs_full": 0.85
+  },
+  {
+    "k": 6,
+    "join_expansion": false,
+    "all_gold_tables_found": 0.94,
+    "table_recall": 0.975,
+    "tables_sent": 5.3,
+    "schema_tokens_vs_full": 0.872
+  },
+  {
+    "k": 6,
+    "join_expansion": true,
+    "all_gold_tables_found": 0.96,
+    "table_recall": 0.982,
+    "tables_sent": 5.56,
+    "schema_tokens_vs_full": 0.896
+  },
+  {
+    "k": 7,
+    "join_expansion": false,
+    "all_gold_tables_found": 0.98,
+    "table_recall": 0.992,
+    "tables_sent": 5.89,
+    "schema_tokens_vs_full": 0.915
+  },
+  {
+    "k": 7,
+    "join_expansion": true,
+    "all_gold_tables_found": 0.99,
+    "table_recall": 0.995,
+    "tables_sent": 6.09,
+    "schema_tokens_vs_full": 0.932
+  },
+  {
+    "k": 8,
+    "join_expansion": false,
+    "all_gold_tables_found": 0.98,
+    "table_recall": 0.992,
+    "tables_sent": 6.38,
+    "schema_tokens_vs_full": 0.953
+  },
+  {
+    "k": 8,
+    "join_expansion": true,
+    "all_gold_tables_found": 0.99,
+    "table_recall": 0.995,
+    "tables_sent": 6.53,
+    "schema_tokens_vs_full": 0.964
+  }
+]

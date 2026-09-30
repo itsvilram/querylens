@@ -14,7 +14,7 @@ from pydantic import SecretStr
 
 from app.config import Settings
 from app.llm.base import LLMClient
-from app.llm.fake import DEMO_ANSWERS, STORE_2_QUESTION, FakeLLM, fake_answer
+from app.llm.fake import DEMO_ANSWERS, STORE_2_QUESTION, TRICKED_QUESTION, FakeLLM, fake_answer
 from app.llm.openai_compat import OpenAICompatibleClient
 from app.main import create_app
 
@@ -160,6 +160,14 @@ def test_session_id_format_is_checked(api: TestClient, bad_id: str) -> None:
 
 
 # ---------------------------------------- prompt injection: the model was tricked
+
+
+def test_the_demo_tricked_model_is_blocked(api: TestClient) -> None:
+    """Fake mode's own demo of a model that obeys an injection."""
+    response = ask(api, TRICKED_QUESTION)
+
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "unsafe_sql"
 
 
 @pytest.mark.parametrize(

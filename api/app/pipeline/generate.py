@@ -40,13 +40,17 @@ class Generation:
 class GenerationError(Exception):
     """The model's reply was not the JSON we asked for.
 
-    It keeps the token usage: those tokens were spent and count against the budget.
+    It keeps the token usage (those tokens were spent and count against the
+    budget) and the raw reply (the correction step shows it back to the model).
     """
 
-    def __init__(self, detail: str, usage: Usage) -> None:
+    code = "bad_json"
+
+    def __init__(self, detail: str, usage: Usage, text: str = "") -> None:
         super().__init__(detail)
         self.detail = detail
         self.usage = usage
+        self.text = text
 
 
 async def generate_sql(llm: LLMClient, messages: list[Message]) -> Generation:
@@ -58,6 +62,8 @@ async def generate_sql(llm: LLMClient, messages: list[Message]) -> Generation:
             f"{'.'.join(map(str, e['loc'])) or 'reply'}: {e['msg']}" for e in error.errors()
         )
         raise GenerationError(
-            f"The reply was not valid JSON for the answer format: {problems}", completion.usage
+            f"The reply was not valid JSON for the answer format: {problems}",
+            completion.usage,
+            completion.text,
         ) from error
     return Generation(answer=answer, usage=completion.usage, model=completion.model)

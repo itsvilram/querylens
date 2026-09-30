@@ -40,7 +40,8 @@ class AskResponse(BaseModel):
     rows: list[list[JsonValue]]
     truncated: bool
     model: str
-    tokens: int
+    tokens: int  # all LLM calls for this question, retries included
+    retries: int  # how many times self-correction had to fix the SQL
     db_ms: float
 
 
@@ -109,6 +110,7 @@ async def ask(
         rows=[[to_json_value(v) for v in row] for row in result.rows] if result else [],
         truncated=result.truncated if result else False,
         model=answer.generation.model,
-        tokens=answer.generation.usage.total_tokens,
+        tokens=answer.total_tokens,
+        retries=len(answer.attempts),
         db_ms=round(result.elapsed_ms, 1) if result else 0.0,
     )

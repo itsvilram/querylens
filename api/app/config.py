@@ -62,6 +62,9 @@ class Settings(BaseSettings):
         "postgresql://bird_ro:bird_ro_dev@127.0.0.1:5432/bird_eval"
     )
 
+    # Self-correction: how many times a failed query goes back to the model (0 = off).
+    correction_retries: int = 2
+
     # Limits for one question.
     row_cap: int = 1000
     query_timeout_ms: int = 5000

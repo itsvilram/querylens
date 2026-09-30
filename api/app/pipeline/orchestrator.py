@@ -1,7 +1,9 @@
 """Run the pipeline stages for one question, in order.
 
-Stages so far: retrieve (optional) → budget → generate → validate → execute.
-Later phases add rewrite, cache and correct, and stream progress events.
+Stages so far: retrieve (optional) → generate → validate → execute, with
+self-correction around the last three (app/pipeline/correct.py) and every LLM
+call charged to the daily token budget. Later phases add rewrite and cache,
+and stream progress events.
 
 Each stage raises its own error type; the API layer turns those into safe
 messages for the client.
@@ -15,16 +17,15 @@ import asyncpg
 
 from app.config import Settings
 from app.db.allowlist import PAGILA_TABLES
-from app.llm.base import LLMClient, Message
+from app.llm.base import LLMClient
+from app.llm.budgeted import BudgetedLLM
 from app.llm.prompts import build_messages
-from app.pipeline.execute import QueryResult, run_readonly
-from app.pipeline.generate import Generation, GenerationError, generate_sql
+from app.pipeline.correct import Attempt, answer_with_correction
+from app.pipeline.execute import QueryResult
+from app.pipeline.generate import Generation
 from app.pipeline.retrieve import Retriever
-from app.pipeline.validate import SqlPolicy, ValidatedSql, validate_sql
+from app.pipeline.validate import SqlPolicy, ValidatedSql
 from app.store.budget import TokenBudget
-
-# Room for the reply and the model's hidden reasoning, on top of the prompt.
-REPLY_TOKEN_ALLOWANCE = 2_000
 
 
 @dataclass
@@ -42,32 +43,29 @@ class Answer:
     generation: Generation
     validated: ValidatedSql | None  # None when the model declined to write SQL
     result: QueryResult | None
-
-
-def estimate_tokens(messages: list[Message]) -> int:
-    return sum(len(m.content) for m in messages) // 4 + REPLY_TOKEN_ALLOWANCE
+    attempts: list[Attempt]  # failed attempts that were corrected
+    total_tokens: int  # all LLM calls for this question, retries included
 
 
 async def answer_question(question: str, deps: PipelineDeps) -> Answer:
+    settings = deps.settings
     schema_text = await deps.retriever.schema_for(question) if deps.retriever else deps.schema_text
-    messages = build_messages(question, schema_text=schema_text)
-
-    reservation = await deps.budget.reserve(estimate_tokens(messages))
-    tokens_used = 0
-    try:
-        generation = await generate_sql(deps.llm, messages)
-        tokens_used = generation.usage.total_tokens
-    except GenerationError as error:
-        tokens_used = error.usage.total_tokens
-        raise
-    finally:
-        await deps.budget.settle(reservation, tokens_used)
-
-    if not generation.answer.sql.strip():
-        return Answer(generation=generation, validated=None, result=None)
-
-    validated = validate_sql(
-        generation.answer.sql, SqlPolicy(PAGILA_TABLES, row_cap=deps.settings.row_cap)
+    outcome = await answer_with_correction(
+        BudgetedLLM(deps.llm, deps.budget),
+        build_messages(question, schema_text=schema_text),
+        policy=SqlPolicy(PAGILA_TABLES, row_cap=settings.row_cap),
+        pool=deps.pool,
+        timeout_ms=settings.query_timeout_ms,
+        max_retries=settings.correction_retries,
     )
-    result = await run_readonly(deps.pool, validated, timeout_ms=deps.settings.query_timeout_ms)
-    return Answer(generation=generation, validated=validated, result=result)
+    if outcome.failure is not None:
+        raise outcome.failure  # the API turns it into a safe message
+    if outcome.generation is None:  # can't happen: no failure means a readable answer
+        raise RuntimeError("The correction loop ended without an answer.")
+    return Answer(
+        generation=outcome.generation,
+        validated=outcome.validated,
+        result=outcome.result,
+        attempts=outcome.attempts,
+        total_tokens=outcome.usage.total_tokens,
+    )

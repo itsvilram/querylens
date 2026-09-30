@@ -16,13 +16,16 @@ concurrency:
 
 jobs:
   api:
-    name: API (lint, types, tests)
+    name: API (lint, types, unit + integration tests)
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: api
     steps:
       - uses: actions/checkout@v7
+      - name: Start Postgres (Pagila + ro_user) for the integration tests
+        working-directory: .
+        run: docker compose up -d --build --wait --wait-timeout 300 db
       - uses: astral-sh/setup-uv@v10
         with:
           version: "0.12.21"
@@ -52,18 +55,3 @@ jobs:
       - run: npm run type-check
       - run: npm test
       - run: npm run build-only
-
-  db:
-    name: Database image (Pagila + read-only role)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-      - run: docker compose up -d --build --wait --wait-timeout 300 db
-      - name: ro_user can read but not write
-        run: |
-          ro() { docker compose exec -T -e PGPASSWORD=ro_user_dev db \
-                 psql -h 127.0.0.1 -U ro_user -d pagila -X -tA -c "$1"; }
-          test "$(ro 'SELECT count(*) > 50000 FROM rental')" = "t"
-          if ro "INSERT INTO category (name) VALUES ('x')"; then
-            echo "ro_user could write!"; exit 1
-          fi

@@ -22,6 +22,12 @@ class Settings(BaseSettings):
     gemini_api_key: SecretStr | None = None
     groq_api_key: SecretStr | None = None
 
+    # Generated SQL runs as ro_user. The default matches docker-compose.yml
+    # (local development only; set READONLY_DATABASE_URL anywhere else).
+    readonly_database_url: SecretStr = SecretStr(
+        "postgresql://ro_user:ro_user_dev@127.0.0.1:5432/pagila"
+    )
+
 
 @lru_cache
 def get_settings() -> Settings:

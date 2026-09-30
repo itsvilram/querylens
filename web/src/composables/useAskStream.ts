@@ -43,12 +43,14 @@ export function useAskStream() {
         chat.fail(id, (await toApiError(response)).body)
         return
       }
-      for await (const { event, data } of readSse(response.body)) {
+      for await (const { event, data } of readSse(response.body, controller.signal)) {
         if (event === 'stage') chat.addStage(id, (JSON.parse(data) as { stage: Stage }).stage)
         else if (event === 'answer') chat.finish(id, JSON.parse(data) as Answer)
         else if (event === 'error') chat.fail(id, JSON.parse(data) as ApiErrorBody)
       }
-      chat.fail(id, CONNECTION_LOST) // does nothing if the turn already ended
+      // Both do nothing if the turn already ended with an answer or an error.
+      if (controller.signal.aborted) chat.cancel(id)
+      else chat.fail(id, CONNECTION_LOST)
     } catch {
       if (controller.signal.aborted) chat.cancel(id)
       else chat.fail(id, NETWORK_ERROR)

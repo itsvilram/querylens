@@ -14,14 +14,24 @@ export interface SseEvent {
   data: string
 }
 
-export async function* readSse(body: ReadableStream<Uint8Array>): AsyncGenerator<SseEvent> {
+/**
+ * signal: when it aborts, stop reading at once. (Aborting fetch() is not
+ * guaranteed to end a body that is already streaming, so we cancel our reader.)
+ */
+export async function* readSse(
+  body: ReadableStream<Uint8Array>,
+  signal?: AbortSignal,
+): AsyncGenerator<SseEvent> {
   const reader = body.getReader()
+  const stop = () => void reader.cancel().catch(() => {})
+  signal?.addEventListener('abort', stop, { once: true })
   const decoder = new TextDecoder() // stream mode: a UTF-8 character split across chunks is kept
   let buffer = ''
   try {
     for (;;) {
       const { value, done } = await reader.read()
       if (done) break
+      if (signal?.aborted) return
       // Drop \r so "\r\n" line endings work too (safe even if a chunk ends between \r and \n).
       buffer += decoder.decode(value, { stream: true }).replaceAll('\r', '')
       let end = buffer.indexOf('\n\n')
@@ -32,9 +42,11 @@ export async function* readSse(body: ReadableStream<Uint8Array>): AsyncGenerator
         end = buffer.indexOf('\n\n')
       }
     }
+    if (signal?.aborted) return // cut off mid-event: don't read the half
     const last = parseEvent(buffer + decoder.decode().replaceAll('\r', ''))
     if (last) yield last // the stream ended without a final blank line
   } finally {
+    signal?.removeEventListener('abort', stop)
     reader.releaseLock()
   }
 }

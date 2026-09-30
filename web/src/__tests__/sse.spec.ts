@@ -57,6 +57,23 @@ describe('readSse', () => {
     expect(events).toEqual([{ event: 'stage', data: '{"stage":"generate"}' }])
   })
 
+  it('stops reading an endless stream when the signal aborts', async () => {
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode(STAGE + 'event: answer\ndata: {"half'))
+      }, // never closes, like a server still working
+    })
+    const abort = new AbortController()
+    const events: SseEvent[] = []
+
+    for await (const event of readSse(body, abort.signal)) {
+      events.push(event)
+      abort.abort()
+    }
+
+    expect(events.map((e) => e.event)).toEqual(['stage']) // and the half event is dropped
+  })
+
   it('reads a last event that has no closing blank line', async () => {
     expect(await collect(['event: answer\ndata: {}'])).toEqual([{ event: 'answer', data: '{}' }])
   })

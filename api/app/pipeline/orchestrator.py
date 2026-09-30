@@ -1,7 +1,7 @@
 """Run the pipeline stages for one question, in order.
 
-Phase 3 stages: budget → generate → validate → execute. Later phases add
-rewrite, cache, retrieve and correct around them, and stream progress events.
+Stages so far: retrieve (optional) → budget → generate → validate → execute.
+Later phases add rewrite, cache and correct, and stream progress events.
 
 Each stage raises its own error type; the API layer turns those into safe
 messages for the client.
@@ -19,6 +19,7 @@ from app.llm.base import LLMClient, Message
 from app.llm.prompts import build_messages
 from app.pipeline.execute import QueryResult, run_readonly
 from app.pipeline.generate import Generation, GenerationError, generate_sql
+from app.pipeline.retrieve import Retriever
 from app.pipeline.validate import SqlPolicy, ValidatedSql, validate_sql
 from app.store.budget import TokenBudget
 
@@ -32,7 +33,8 @@ class PipelineDeps:
     llm: LLMClient
     pool: asyncpg.Pool[asyncpg.Record]
     budget: TokenBudget
-    schema_text: str
+    schema_text: str  # the full schema
+    retriever: Retriever | None = None  # set when SCHEMA_MODE=retrieved
 
 
 @dataclass(frozen=True)
@@ -47,7 +49,8 @@ def estimate_tokens(messages: list[Message]) -> int:
 
 
 async def answer_question(question: str, deps: PipelineDeps) -> Answer:
-    messages = build_messages(question, schema_text=deps.schema_text)
+    schema_text = await deps.retriever.schema_for(question) if deps.retriever else deps.schema_text
+    messages = build_messages(question, schema_text=schema_text)
 
     reservation = await deps.budget.reserve(estimate_tokens(messages))
     tokens_used = 0

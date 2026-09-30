@@ -13,6 +13,7 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}  # local dev only
       QUERYLENS_RO_PASSWORD: ${QUERYLENS_RO_PASSWORD:-ro_user_dev}
+      QUERYLENS_APP_PASSWORD: ${QUERYLENS_APP_PASSWORD:-app_dev}
     ports:
       - "127.0.0.1:5432:5432"
     volumes:
@@ -45,6 +46,7 @@ services:
     environment:
       ADMIN_DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgres}@db:5432/pagila
       READONLY_DATABASE_URL: postgresql://ro_user:${QUERYLENS_RO_PASSWORD:-ro_user_dev}@db:5432/pagila
+      APP_DATABASE_URL: postgresql://querylens_app:${QUERYLENS_APP_PASSWORD:-app_dev}@db:5432/pagila
       REDIS_URL: redis://redis:6379/0
     depends_on:
       db:

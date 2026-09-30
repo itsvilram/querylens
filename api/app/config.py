@@ -5,6 +5,7 @@ in "fake" LLM mode it makes no network calls and needs no key.
 """
 
 from functools import lru_cache
+from pathlib import Path
 from typing import Literal
 
 from pydantic import SecretStr
@@ -43,7 +44,19 @@ class Settings(BaseSettings):
     readonly_database_url: SecretStr = SecretStr(
         "postgresql://ro_user:ro_user_dev@127.0.0.1:5432/pagila"
     )
+    # The app's own tables (schema "app": schema_docs). Never runs generated SQL.
+    app_database_url: SecretStr = SecretStr(
+        "postgresql://querylens_app:app_dev@127.0.0.1:5432/pagila"
+    )
     redis_url: str = "redis://127.0.0.1:6379/0"
+
+    # Schema retrieval (RAG): "full" sends every table; "retrieved" sends the
+    # top-k tables for the question plus the tables that join them.
+    schema_mode: Literal["full", "retrieved"] = "full"
+    retrieval_k: int = 4
+    retrieval_db_id: str = "pagila"  # which documents in app.schema_docs to search
+    embedding_model: str = "BAAI/bge-small-en-v1.5"
+    embedding_cache_dir: str = str(Path(__file__).resolve().parents[2] / "data" / "models")
     # The BIRD eval database (only the eval runner uses it; see scripts/load_bird.py).
     bird_database_url: SecretStr = SecretStr(
         "postgresql://bird_ro:bird_ro_dev@127.0.0.1:5432/bird_eval"

@@ -16,10 +16,11 @@ from redis.asyncio import Redis
 
 from app.api.ask import router as ask_router
 from app.api.health import router as health_router
+from app.api.schema import router as schema_router
 from app.api.stats import router as stats_router
 from app.config import Settings, get_settings
 from app.db.allowlist import PAGILA_TABLES
-from app.db.schema import describe_schema, foreign_key_edges
+from app.db.schema import foreign_key_edges, format_schema, read_schema
 from app.embed.base import Embedder
 from app.embed.fastembed_impl import FastEmbedder
 from app.errors import install_error_handling
@@ -70,7 +71,8 @@ def create_app(
                     k=config.retrieval_k,
                 )
 
-            schema_text = await describe_schema(pool, PAGILA_TABLES)
+            app.state.schema_tables = await read_schema(pool, PAGILA_TABLES)  # the schema panel
+            schema_text = format_schema(app.state.schema_tables)  # the prompt
             app.state.deps = PipelineDeps(
                 settings=config,
                 llm=client,
@@ -113,6 +115,7 @@ def create_app(
     app.include_router(health_router, prefix="/api")
     app.include_router(ask_router, prefix="/api")
     app.include_router(stats_router, prefix="/api")
+    app.include_router(schema_router, prefix="/api")
     return app
 
 

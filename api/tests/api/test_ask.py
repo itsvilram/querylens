@@ -255,3 +255,20 @@ def test_provider_rate_limit_is_passed_on_with_retry_after() -> None:
         assert response.status_code == 503
         assert response.json()["error"]["code"] == "llm_busy"
         assert response.headers["Retry-After"] == "7"
+
+
+# ---------------------------------------------------------------- schema panel
+
+
+def test_schema_lists_the_allowed_tables_with_keys_and_notes(api: TestClient) -> None:
+    body = api.get("/api/schema").json()
+
+    tables = {t["name"]: t for t in body["tables"]}
+    assert body["database"] == "Pagila"
+    assert len(tables) == 15
+    assert "film_embedding" not in tables  # never show what the app can't query
+    film = {c["name"]: c for c in tables["film"]["columns"]}
+    assert film["film_id"]["primary_key"] is True
+    assert film["language_id"]["references"] == "language.language_id"
+    assert "rental_rate" in tables["film"]["description"]
+    assert all(t["description"] for t in tables.values())

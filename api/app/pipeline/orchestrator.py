@@ -155,7 +155,8 @@ def _answer_data(outcome: Outcome) -> AnswerData:
         [c.type_name for c in columns], len(result.rows) if result else 0, generated.chart_hint
     )
     return AnswerData(
-        sql=outcome.validated.sql if outcome.validated else "",
+        # What ran, laid out for reading (only whitespace differs from validated.sql).
+        sql=(outcome.validated.pretty or outcome.validated.sql) if outcome.validated else "",
         explanation=generated.explanation,
         chart=chart,
         chart_options=options,

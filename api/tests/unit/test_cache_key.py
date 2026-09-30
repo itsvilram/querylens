@@ -29,8 +29,8 @@ def test_different_questions_get_different_keys() -> None:
 
 def test_key_has_a_fixed_shape() -> None:
     key = answer_cache_key("x" * 500, fingerprint())
-    assert key.startswith("answer:v1:")
-    assert len(key) == len("answer:v1:") + 32
+    assert key.startswith("answer:v2:")
+    assert len(key) == len("answer:v2:") + 32
 
 
 def test_anything_that_changes_the_answer_changes_the_fingerprint() -> None:

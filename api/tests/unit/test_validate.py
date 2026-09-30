@@ -207,3 +207,10 @@ def test_same_input_gives_same_output() -> None:
     sql = "SELECT rating, count(*) FROM film GROUP BY rating"
 
     assert check(sql) == check(sql)
+
+
+def test_pretty_sql_is_the_same_query_laid_out_for_reading() -> None:
+    checked = check("select c.name, count(*) from film f join category c on true group by c.name")
+
+    assert "\nFROM film AS f\n" in checked.pretty
+    assert checked.pretty.split() == checked.sql.split()  # only whitespace differs

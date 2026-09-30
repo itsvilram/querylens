@@ -60,6 +60,7 @@ class ValidatedSql:
     sql: str  # regenerated from the checked tree, with a LIMIT: run this, nothing else
     row_cap: int
     tables: frozenset[str]  # the tables it reads, e.g. for logs and the UI
+    pretty: str = ""  # the same query laid out on several lines, only for people to read
 
 
 # Statement types that write or change the database, wherever they appear.
@@ -102,6 +103,7 @@ def validate_sql(sql: str, policy: SqlPolicy) -> ValidatedSql:
         sql=tree.sql(dialect="postgres", comments=False),
         row_cap=policy.row_cap,
         tables=tables,
+        pretty=tree.sql(dialect="postgres", comments=False, pretty=True),
     )
 
 

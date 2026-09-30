@@ -1,0 +1,62 @@
+{
+  "name": "F",
+  "dataset": "bird",
+  "model": "gemini-3.5-flash-lite",
+  "provider": "gemini",
+  "options": {
+    "schema": "retrieved",
+    "k": 4,
+    "correction": true,
+    "fewshot": true,
+    "evidence": true
+  },
+  "finished": false,
+  "date": "2026-09-30",
+  "questions": 32,
+  "ex": {
+    "correct": 17,
+    "accuracy": 0.5312,
+    "ci95": [
+      0.3645,
+      0.6913
+    ]
+  },
+  "strict_ex": {
+    "correct": 17
+  },
+  "by_difficulty": {
+    "simple": {
+      "correct": 8,
+      "total": 10
+    },
+    "moderate": {
+      "correct": 7,
+      "total": 16
+    },
+    "challenging": {
+      "correct": 2,
+      "total": 6
+    }
+  },
+  "by_status": {
+    "correct": 17,
+    "wrong": 15
+  },
+  "tokens": {
+    "prompt_mean": 1002,
+    "prompt_max": 2016,
+    "total_mean": 1104
+  },
+  "latency_ms": {
+    "llm_p50": 1240,
+    "llm_p95": 1854,
+    "db_p50": 42.0,
+    "db_p95": 293.0,
+    "llm_measured": 22
+  },
+  "correction": {
+    "first_try_failed": 0,
+    "rescued": 0,
+    "retries": 0
+  }
+}

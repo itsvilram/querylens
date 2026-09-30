@@ -10,23 +10,49 @@ from typing import Literal
 from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+# OpenAI-compatible endpoints. Switching provider is a settings change, not code.
+PROVIDER_BASE_URLS = {
+    "gemini": "https://generativelanguage.googleapis.com/v1beta/openai/",
+    "groq": "https://api.groq.com/openai/v1/",
+}
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     # "fake": a scripted FakeLLM answers (tests, demos without a key).
-    # "real": calls the LLM provider (Gemini).
+    # "real": calls the LLM provider below.
     llm_mode: Literal["fake", "real"] = "fake"
 
     # SecretStr hides the value in logs, errors and repr(): it prints as '**********'.
     gemini_api_key: SecretStr | None = None
     groq_api_key: SecretStr | None = None
 
+    # The model the app uses (PLAN.md §0: one model per job), pinned here.
+    llm_provider: Literal["gemini", "groq"] = "gemini"
+    llm_model: str = "gemini-3.5-flash-lite"
+    # Gemini 3.x can't switch reasoning off; "low" keeps it short and cheap.
+    llm_reasoning_effort: Literal["minimal", "low", "medium", "high"] | None = "low"
+    llm_timeout_s: float = 60.0
+    # Strict JSON-schema output. Turn off for a model that rejects it; the
+    # prompt still asks for JSON, and the reply is still validated.
+    llm_structured_output: bool = True
+
     # Generated SQL runs as ro_user. The default matches docker-compose.yml
     # (local development only; set READONLY_DATABASE_URL anywhere else).
     readonly_database_url: SecretStr = SecretStr(
         "postgresql://ro_user:ro_user_dev@127.0.0.1:5432/pagila"
     )
+    redis_url: str = "redis://127.0.0.1:6379/0"
+
+    # Limits for one question.
+    row_cap: int = 1000
+    query_timeout_ms: int = 5000
+    # LLM tokens the whole app may use per day (protects the free quota).
+    daily_token_budget: int = 1_000_000
+
+    def llm_api_key(self) -> SecretStr | None:
+        return self.gemini_api_key if self.llm_provider == "gemini" else self.groq_api_key
 
 
 @lru_cache

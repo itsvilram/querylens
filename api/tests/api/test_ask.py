@@ -74,7 +74,9 @@ def test_answer_shape(api: TestClient) -> None:
 
     assert body["columns"] == [{"name": "films", "type": "int8"}]
     assert body["rows"] == [[1000]]
-    assert body["chart_hint"] == "number"
+    assert body["chart"] == "number"
+    assert body["chart_options"] == ["number", "table"]
+    assert body["cache"] == "miss"
     assert body["sql"].endswith("LIMIT 1001")  # the row cap was added
     assert body["truncated"] is False
     assert body["tokens"] > 0
@@ -108,14 +110,15 @@ def test_follow_up_is_understood_from_the_chat(api: TestClient) -> None:
     assert body["rows"]
 
 
-def test_follow_up_tokens_include_the_rewrite(api: TestClient) -> None:
-    chat = new_chat()
-    ask(api, FIRST, chat)
+def test_follow_up_tokens_include_the_rewrite() -> None:
+    with client_for(FakeLLM(), answer_cache_ttl_s=0) as client:  # no cache: both run fully
+        chat = new_chat()
+        ask(client, FIRST, chat)
 
-    via_follow_up = ask(api, FOLLOW_UP, chat).json()["tokens"]
-    asked_directly = ask(api, STORE_2_QUESTION).json()["tokens"]
+        via_follow_up = ask(client, FOLLOW_UP, chat).json()["tokens"]
+        asked_directly = ask(client, STORE_2_QUESTION).json()["tokens"]
 
-    assert via_follow_up > asked_directly
+        assert via_follow_up > asked_directly
 
 
 def test_without_a_chat_a_follow_up_is_taken_as_typed() -> None:

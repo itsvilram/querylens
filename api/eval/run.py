@@ -26,7 +26,6 @@ from typing import Any
 
 import asyncpg
 
-from app.api.serialize import JsonValue, to_json_value
 from app.config import PROVIDER_BASE_URLS, Settings
 from app.db.allowlist import PAGILA_TABLES
 from app.db.schema import describe_schema, foreign_key_edges
@@ -39,6 +38,7 @@ from app.pipeline.correct import MAX_RETRIES, Outcome, answer_with_correction
 from app.pipeline.execute import ExecutionError, run_readonly
 from app.pipeline.generate import GenerationError
 from app.pipeline.retrieve import connect_tables, search_tables
+from app.pipeline.serialize import JsonValue, to_json_value
 from app.pipeline.validate import SqlPolicy, SqlRejected, ValidatedSql
 from eval.cache import CachedLLM
 from eval.dataset import REPO, Question, bird_tables, load_bird_subset, load_pagila_ci

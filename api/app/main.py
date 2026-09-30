@@ -11,10 +11,12 @@ from contextlib import AsyncExitStack, asynccontextmanager
 
 import asyncpg
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from redis.asyncio import Redis
 
 from app.api.ask import router as ask_router
 from app.api.health import router as health_router
+from app.api.stats import router as stats_router
 from app.config import Settings, get_settings
 from app.db.allowlist import PAGILA_TABLES
 from app.db.schema import describe_schema, foreign_key_edges
@@ -23,10 +25,13 @@ from app.embed.fastembed_impl import FastEmbedder
 from app.errors import install_error_handling
 from app.llm.base import LLMClient
 from app.llm.factory import build_llm
+from app.pipeline.cache_key import pipeline_fingerprint
 from app.pipeline.orchestrator import PipelineDeps
 from app.pipeline.retrieve import Retriever
+from app.store.answer_cache import AnswerCache
 from app.store.budget import TokenBudget
 from app.store.conversations import ConversationStore
+from app.store.rate_limit import RateLimiter, RateRule
 
 
 def create_app(
@@ -65,6 +70,7 @@ def create_app(
                     k=config.retrieval_k,
                 )
 
+            schema_text = await describe_schema(pool, PAGILA_TABLES)
             app.state.deps = PipelineDeps(
                 settings=config,
                 llm=client,
@@ -75,15 +81,38 @@ def create_app(
                     ttl_s=config.conversation_ttl_s,
                     max_turns=config.conversation_max_turns,
                 ),
-                schema_text=await describe_schema(pool, PAGILA_TABLES),
+                schema_text=schema_text,
                 retriever=retriever,
+                cache=AnswerCache(redis, ttl_s=config.answer_cache_ttl_s)
+                if config.answer_cache_ttl_s > 0
+                else None,
+                cache_fingerprint=pipeline_fingerprint(
+                    schema_text=schema_text, model=client.model, settings=config
+                ),
             )
+
+            rules = [
+                RateRule("minute", config.rate_limit_per_minute, 60),
+                RateRule("hour", config.rate_limit_per_hour, 3600),
+            ]
+            active = [rule for rule in rules if rule.limit > 0]
+            app.state.rate_limiter = RateLimiter(redis, active) if active else None
+            app.state.trusted_proxies = config.trusted_proxies
             yield
 
     app = FastAPI(title="QueryLens API", version="0.1.0", lifespan=lifespan)
     install_error_handling(app)
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=config.cors_origins,
+        allow_methods=["GET", "POST"],
+        allow_headers=["Content-Type"],
+        expose_headers=["X-Request-ID", "Retry-After"],
+        max_age=600,
+    )
     app.include_router(health_router, prefix="/api")
     app.include_router(ask_router, prefix="/api")
+    app.include_router(stats_router, prefix="/api")
     return app
 
 

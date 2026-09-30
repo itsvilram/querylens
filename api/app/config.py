@@ -8,7 +8,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
-from pydantic import SecretStr
+from pydantic import IPvAnyNetwork, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # OpenAI-compatible endpoints. Switching provider is a settings change, not code.
@@ -74,6 +74,21 @@ class Settings(BaseSettings):
     query_timeout_ms: int = 5000
     # LLM tokens the whole app may use per day (protects the free quota).
     daily_token_budget: int = 1_000_000
+
+    # Answer cache: how long a finished answer is kept, in seconds (0 = no cache).
+    answer_cache_ttl_s: int = 24 * 3600
+
+    # Rate limit per client IP, sliding window (0 = no limit for that window).
+    # Every request counts, cached answers too: it protects Redis and the DB as well.
+    rate_limit_per_minute: int = 10
+    rate_limit_per_hour: int = 100
+    # Proxies allowed to tell us the client IP in X-Forwarded-For: IPs or CIDR
+    # ranges, as JSON, e.g. TRUSTED_PROXIES='["172.16.0.0/12"]'. Empty = trust none.
+    trusted_proxies: list[IPvAnyNetwork] = []
+    # Other sites allowed to call this API from a browser (CORS), e.g.
+    # CORS_ORIGINS='["https://example.com"]'. Empty = same site only, which is
+    # how the app is served (Vite proxy, nginx, one Vercel domain).
+    cors_origins: list[str] = []
 
     def llm_api_key(self) -> SecretStr | None:
         return self.gemini_api_key if self.llm_provider == "gemini" else self.groq_api_key

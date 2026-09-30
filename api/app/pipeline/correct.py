@@ -20,6 +20,7 @@ import asyncpg
 from app.llm.base import LLMClient, Message, Usage
 from app.pipeline.execute import ExecutionError, QueryResult, run_readonly
 from app.pipeline.generate import Generation, GenerationError, generate_sql
+from app.pipeline.progress import Progress, no_progress
 from app.pipeline.validate import SqlPolicy, SqlRejected, ValidatedSql, validate_sql
 
 MAX_RETRIES = 2
@@ -57,10 +58,12 @@ async def answer_with_correction(
     pool: asyncpg.Pool[asyncpg.Record],
     timeout_ms: int,
     max_retries: int = MAX_RETRIES,
+    progress: Progress = no_progress,
 ) -> Outcome:
     outcome = Outcome()
     for attempt in range(max_retries + 1):
         can_retry = attempt < max_retries
+        await progress("generate" if attempt == 0 else "correct")
         try:
             generation = await generate_sql(llm, messages)
         except GenerationError as error:
@@ -79,6 +82,7 @@ async def answer_with_correction(
             return outcome
         try:
             outcome.validated = validate_sql(generation.answer.sql, policy)
+            await progress("execute")
             outcome.result = await run_readonly(pool, outcome.validated, timeout_ms=timeout_ms)
             return outcome
         except (SqlRejected, ExecutionError) as error:

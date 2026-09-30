@@ -48,6 +48,10 @@ services:
       READONLY_DATABASE_URL: postgresql://ro_user:${QUERYLENS_RO_PASSWORD:-ro_user_dev}@db:5432/pagila
       APP_DATABASE_URL: postgresql://querylens_app:${QUERYLENS_APP_PASSWORD:-app_dev}@db:5432/pagila
       REDIS_URL: redis://redis:6379/0
+      # nginx (the web service) reaches the API from Docker's private network,
+      # so the client IP it forwards is believed. The API port is bound to
+      # 127.0.0.1 only, so nobody outside this machine can pose as that proxy.
+      TRUSTED_PROXIES: '["172.16.0.0/12", "192.168.0.0/16"]'
     depends_on:
       db:
         condition: service_healthy

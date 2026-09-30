@@ -18,4 +18,6 @@ RUN useradd --create-home appuser
 USER appuser
 
 EXPOSE 8000
-CMD ["/srv/.venv/bin/uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# --no-proxy-headers: the app reads X-Forwarded-For itself, and only from
+# TRUSTED_PROXIES (see app/api/client_ip.py).
+CMD ["/srv/.venv/bin/uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--no-proxy-headers"]

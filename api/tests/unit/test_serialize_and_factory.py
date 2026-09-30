@@ -6,11 +6,11 @@ from decimal import Decimal
 import pytest
 from pydantic import SecretStr
 
-from app.api.serialize import to_json_value
 from app.config import Settings
 from app.llm.factory import build_llm
 from app.llm.fake import FakeLLM
 from app.llm.openai_compat import OpenAICompatibleClient
+from app.pipeline.serialize import to_json_value
 
 
 @pytest.mark.parametrize(

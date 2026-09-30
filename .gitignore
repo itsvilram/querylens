@@ -1,0 +1,36 @@
+# private notes, never commit
+prep/
+CLAUDE.local.md
+
+# secrets
+.env
+.env.*
+!.env.example
+
+# downloaded datasets (BIRD is CC BY-SA: download it, never commit it)
+data/
+
+# python
+.venv/
+__pycache__/
+*.pyc
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.coverage
+
+# node
+node_modules/
+dist/
+coverage/
+playwright-report/
+test-results/
+*.tsbuildinfo
+
+# editors and OS
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+Thumbs.db
+*.log

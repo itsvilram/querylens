@@ -1,0 +1,10 @@
+# Store and check out text files with LF endings, so formatters and CI (Linux)
+# see the same bytes as Windows.
+* text=auto eol=lf
+
+# Binary files: never touch line endings.
+*.png binary
+*.jpg binary
+*.ico binary
+*.woff binary
+*.woff2 binary

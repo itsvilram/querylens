@@ -20,4 +20,11 @@ export default defineConfig({
       '/api': 'http://127.0.0.1:8000',
     },
   },
+  // `vite preview` serves the production build. The end-to-end tests run it
+  // against their own API server, so its address can be set with API_URL.
+  preview: {
+    proxy: {
+      '/api': process.env.API_URL ?? 'http://127.0.0.1:8000',
+    },
+  },
 })

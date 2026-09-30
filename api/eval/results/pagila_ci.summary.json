@@ -1,0 +1,51 @@
+{
+  "name": "pagila_ci",
+  "dataset": "pagila_ci",
+  "model": "gemini-3.5-flash-lite",
+  "provider": "gemini",
+  "options": {
+    "schema": "full",
+    "correction": false,
+    "fewshot": false,
+    "evidence": true
+  },
+  "finished": true,
+  "date": "2026-09-30",
+  "questions": 5,
+  "ex": {
+    "correct": 5,
+    "accuracy": 1.0,
+    "ci95": [
+      0.5655,
+      1.0
+    ]
+  },
+  "strict_ex": {
+    "correct": 5
+  },
+  "by_difficulty": {
+    "simple": {
+      "correct": 4,
+      "total": 4
+    },
+    "moderate": {
+      "correct": 1,
+      "total": 1
+    }
+  },
+  "by_status": {
+    "correct": 5
+  },
+  "tokens": {
+    "prompt_mean": 989,
+    "prompt_max": 993,
+    "total_mean": 1051
+  },
+  "latency_ms": {
+    "llm_p50": 4150,
+    "llm_p95": 4563,
+    "db_p50": 24.8,
+    "db_p95": 43.5,
+    "llm_measured": 5
+  }
+}

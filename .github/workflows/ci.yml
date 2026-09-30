@@ -26,15 +26,19 @@ jobs:
       - name: Start Postgres (Pagila + ro_user) and Redis for the integration tests
         working-directory: .
         run: docker compose up -d --build --wait --wait-timeout 300 db redis
-      - uses: astral-sh/setup-uv@v10
+      - uses: astral-sh/setup-uv@v10.2.0  # this action publishes exact tags only (no "v10")
         with:
           version: "0.12.21"
           enable-cache: true
       - run: uv sync --locked
       - run: uv run ruff check .
       - run: uv run ruff format --check .
-      - run: uv run mypy app tests
+      - run: uv run mypy app tests eval scripts
       - run: uv run pytest
+      - name: Eval pipeline on recorded replies (no network, no key)
+        run: >
+          uv run python -m eval.run --dataset pagila_ci --llm replay
+          --results-dir "$RUNNER_TEMP/eval" --expect eval/results/pagila_ci.summary.json
 
   web:
     name: Web (lint, types, tests, build)

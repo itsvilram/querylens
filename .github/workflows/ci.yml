@@ -23,9 +23,9 @@ jobs:
         working-directory: api
     steps:
       - uses: actions/checkout@v7
-      - name: Start Postgres (Pagila + ro_user) for the integration tests
+      - name: Start Postgres (Pagila + ro_user) and Redis for the integration tests
         working-directory: .
-        run: docker compose up -d --build --wait --wait-timeout 300 db
+        run: docker compose up -d --build --wait --wait-timeout 300 db redis
       - uses: astral-sh/setup-uv@v10
         with:
           version: "0.12.21"

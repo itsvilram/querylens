@@ -20,8 +20,13 @@
     "format:check": "prettier --check src/ e2e/"
   },
   "dependencies": {
+    "@shikijs/langs": "^4.4.3",
+    "@shikijs/themes": "^4.4.3",
     "@tanstack/vue-query": "^5.104.0",
+    "@tanstack/vue-table": "^9.2.4",
+    "chart.js": "^4.5.1",
     "pinia": "^4.0.3",
+    "shiki": "^4.4.3",
     "vue": "^3.5.42"
   },
   "devDependencies": {

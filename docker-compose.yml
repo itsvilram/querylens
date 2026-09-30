@@ -1,0 +1,73 @@
+# Local stack for QueryLens.
+#   docker compose up -d                  -> Postgres (Pagila) + Redis, for development
+#   docker compose --profile full up -d   -> also the API and the web app
+# Ports are bound to 127.0.0.1, so nothing is reachable from the network.
+name: querylens
+
+services:
+  db:
+    build: ./db
+    image: querylens-db:pagila-v4.1.1
+    environment:
+      POSTGRES_DB: pagila
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}  # local dev only
+      QUERYLENS_RO_PASSWORD: ${QUERYLENS_RO_PASSWORD:-ro_user_dev}
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql
+    healthcheck:
+      # TCP check: during the first-start data load, Postgres only listens on a
+      # socket, so this stays "unhealthy" until Pagila is fully loaded.
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U postgres -d pagila"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 120s
+
+  redis:
+    image: redis:8.10-alpine
+    ports:
+      - "127.0.0.1:6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    profiles: ["full"]
+    build: ./api
+    env_file:
+      - path: ./api/.env
+        required: false
+    environment:
+      ADMIN_DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgres}@db:5432/pagila
+      READONLY_DATABASE_URL: postgresql://ro_user:${QUERYLENS_RO_PASSWORD:-ro_user_dev}@db:5432/pagila
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:8000:8000"
+    healthcheck:
+      # The slim image has no curl, so ask Python to call the health route.
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health')"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  web:
+    profiles: ["full"]
+    build: ./web
+    depends_on:
+      api:
+        condition: service_healthy  # otherwise nginx can start before uvicorn listens (502)
+    ports:
+      - "127.0.0.1:8080:80"
+
+volumes:
+  pgdata:

@@ -92,6 +92,13 @@ class Settings(BaseSettings):
     # CORS_ORIGINS='["https://example.com"]'. Empty = same site only, which is
     # how the app is served (Vite proxy, nginx, one Vercel domain).
     cors_origins: list[str] = []
+    # On a platform that sets the client IP itself and drops any value the
+    # client sent (Vercel: "x-real-ip"), read the IP from this header instead.
+    # Never set it where clients can reach the app directly: they could fake it.
+    client_ip_header: str = ""
+
+    # The public demo: the UI tells visitors their questions go to the LLM provider.
+    demo_mode: bool = False
 
     def llm_api_key(self) -> SecretStr | None:
         return self.gemini_api_key if self.llm_provider == "gemini" else self.groq_api_key

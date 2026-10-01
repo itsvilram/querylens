@@ -71,12 +71,16 @@ async def enforce_rate_limit(request: Request) -> None:
     limiter: RateLimiter | None = request.app.state.rate_limiter
     if limiter is None:
         return
+    platform_header: str = request.app.state.client_ip_header
     trusted: list[IPv4Network | IPv6Network] = request.app.state.trusted_proxies
-    ip = client_ip(
-        request.client.host if request.client else None,
-        request.headers.get("x-forwarded-for"),
-        trusted,
-    )
+    if platform_header and request.headers.get(platform_header):
+        ip = request.headers[platform_header].split(",")[0].strip()  # set by the platform
+    else:
+        ip = client_ip(
+            request.client.host if request.client else None,
+            request.headers.get("x-forwarded-for"),
+            trusted,
+        )
     decision = await limiter.hit(rate_limit_bucket(ip))
     if not decision.allowed:
         raise PublicError(

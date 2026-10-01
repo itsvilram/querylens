@@ -38,6 +38,7 @@ export async function toApiError(response: Response): Promise<ApiError> {
 export interface Health {
   status: 'ok'
   llm_mode: 'fake' | 'real' // fake: no AI key on the server, only the demo questions work
+  demo: boolean // the public demo: tell visitors where their questions go
 }
 
 export async function fetchHealth(signal?: AbortSignal): Promise<Health> {

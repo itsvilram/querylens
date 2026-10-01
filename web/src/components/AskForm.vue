@@ -2,12 +2,14 @@
 import { ref } from 'vue'
 
 import { useAsk } from '@/composables/useAskStream'
+import { useHealth } from '@/composables/useHealth'
 import { useChatStore } from '@/stores/chat'
 
 const MAX_LENGTH = 500 // the API's limit
 
 const chat = useChatStore()
 const { ask, cancel } = useAsk()
+const health = useHealth()
 const text = ref('')
 const box = ref<HTMLTextAreaElement | null>(null)
 
@@ -55,6 +57,9 @@ defineExpose({ focus: () => box.value?.focus() })
         >
           <span>Enter to send, Shift+Enter for a new line.</span>
           <span>{{ text.length }}/{{ MAX_LENGTH }}</span>
+        </p>
+        <p v-if="health.data.value?.demo" class="text-xs text-slate-600 dark:text-slate-400">
+          Questions go to Google&rsquo;s Gemini (free tier). Don&rsquo;t type private data.
         </p>
       </div>
       <button

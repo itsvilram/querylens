@@ -49,3 +49,12 @@ addopts = "--import-mode=importlib"  # test files in different folders may share
 markers = [
     "integration: needs Postgres from docker compose (run `docker compose up -d db` first)",
 ]
+
+# Vercel (the hosted demo). The app is found at app/main.py; this builds the Vue
+# app into api/frontend/ first, and its files are served from Vercel's CDN.
+[tool.vercel.scripts]
+build = "python scripts/vercel_build.py"
+
+[tool.vercel.fastapi.static]
+cdn = true      # serve the built files from the CDN even though the app has middleware
+exclude = true  # and keep them out of the Python function bundle

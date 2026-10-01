@@ -53,7 +53,9 @@ export const ANSWER: Answer = {
 }
 
 export const server = setupServer(
-  http.get('*/api/health', () => HttpResponse.json({ status: 'ok', llm_mode: 'real' })),
+  http.get('*/api/health', () =>
+    HttpResponse.json({ status: 'ok', llm_mode: 'real', demo: false }),
+  ),
   http.get('*/api/schema', () => HttpResponse.json(SCHEMA)),
 )
 

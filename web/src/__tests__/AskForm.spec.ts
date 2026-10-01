@@ -1,3 +1,4 @@
+import { VueQueryPlugin } from '@tanstack/vue-query'
 import { render, screen } from '@testing-library/vue'
 import userEvent from '@testing-library/user-event'
 import { createPinia, setActivePinia } from 'pinia'
@@ -14,7 +15,9 @@ function renderForm() {
     ask: vi.fn<(question: string) => Promise<void>>(async () => {}),
     cancel: vi.fn<() => void>(),
   }
-  render(AskForm, { global: { plugins: [pinia], provide: { [askKey as symbol]: stream } } })
+  render(AskForm, {
+    global: { plugins: [pinia, VueQueryPlugin], provide: { [askKey as symbol]: stream } },
+  })
   return { ...stream, user: userEvent.setup(), box: screen.getByLabelText('Your question') }
 }
 

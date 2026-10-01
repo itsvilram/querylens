@@ -4,10 +4,14 @@ create_app() builds a fresh app, so tests can pass their own settings, a
 FakeLLM and a FakeEmbedder. The lifespan opens the shared connections once at
 start-up (database pools, Redis, LLM client), reads the schema for the prompt,
 and closes them all at shutdown.
+
+When the Vue app has been built into api/frontend/ (scripts/vercel_build.py does
+that on Vercel), the same app serves it, so the site and /api share one domain.
 """
 
 from collections.abc import AsyncIterator
 from contextlib import AsyncExitStack, asynccontextmanager
+from pathlib import Path
 
 import asyncpg
 from fastapi import FastAPI
@@ -22,7 +26,6 @@ from app.config import Settings, get_settings
 from app.db.allowlist import PAGILA_TABLES
 from app.db.schema import foreign_key_edges, format_schema, read_schema
 from app.embed.base import Embedder
-from app.embed.fastembed_impl import FastEmbedder
 from app.errors import install_error_handling
 from app.llm.base import LLMClient
 from app.llm.factory import build_llm
@@ -33,6 +36,8 @@ from app.store.answer_cache import AnswerCache
 from app.store.budget import TokenBudget
 from app.store.conversations import ConversationStore
 from app.store.rate_limit import RateLimiter, RateRule
+
+FRONTEND_DIR = Path(__file__).resolve().parents[1] / "frontend"  # the built Vue app, if any
 
 
 def create_app(
@@ -56,6 +61,10 @@ def create_app(
 
             retriever = None
             if config.schema_mode == "retrieved":
+                # Imported only here: fastembed loads an ML runtime, which the
+                # default full-schema mode never needs (it would slow every cold start).
+                from app.embed.fastembed_impl import FastEmbedder
+
                 app_pool = await asyncpg.create_pool(
                     config.app_database_url.get_secret_value(), min_size=1, max_size=5
                 )
@@ -107,9 +116,11 @@ def create_app(
                 RateLimiter(redis, active, key_prefix=config.redis_key_prefix) if active else None
             )
             app.state.trusted_proxies = config.trusted_proxies
+            app.state.client_ip_header = config.client_ip_header
             yield
 
     app = FastAPI(title="QueryLens API", version="0.1.0", lifespan=lifespan)
+    app.state.settings = config
     install_error_handling(app)
     app.add_middleware(
         CORSMiddleware,
@@ -123,6 +134,10 @@ def create_app(
     app.include_router(ask_router, prefix="/api")
     app.include_router(stats_router, prefix="/api")
     app.include_router(schema_router, prefix="/api")
+    if FRONTEND_DIR.is_dir():
+        # API routes always win; other paths get the built files, and page
+        # navigations that match no file get index.html (the single-page app).
+        app.frontend("/", directory=FRONTEND_DIR, fallback="index.html")
     return app
 
 

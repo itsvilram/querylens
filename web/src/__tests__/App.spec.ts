@@ -29,11 +29,25 @@ describe('App', () => {
 
   it('says when the server has no AI key (demo mode)', async () => {
     server.use(
-      http.get('*/api/health', () => HttpResponse.json({ status: 'ok', llm_mode: 'fake' })),
+      http.get('*/api/health', () =>
+        HttpResponse.json({ status: 'ok', llm_mode: 'fake', demo: false }),
+      ),
     )
     renderApp()
 
     expect(await screen.findByText(/Demo mode/)).toBeTruthy()
+  })
+
+  it('tells visitors of the public demo where their questions go', async () => {
+    server.use(
+      http.get('*/api/health', () =>
+        HttpResponse.json({ status: 'ok', llm_mode: 'real', demo: true }),
+      ),
+    )
+    renderApp()
+
+    expect(await screen.findByText(/Public demo: your questions are sent to Google/)).toBeTruthy()
+    expect(screen.getByText(/Don.t type private data/)).toBeTruthy()
   })
 
   it('has a skip link to the question box', () => {

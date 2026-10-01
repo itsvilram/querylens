@@ -34,3 +34,6 @@ test-results/
 .DS_Store
 Thumbs.db
 *.log
+
+# The Vue build copied into the API for Vercel (scripts/vercel_build.py)
+api/frontend/

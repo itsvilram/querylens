@@ -52,7 +52,7 @@ defineExpose({ focus: () => box.value?.focus() })
 
 <template>
   <form
-    class="sticky bottom-0 border-t border-slate-200 bg-slate-50/95 px-4 py-3 backdrop-blur dark:border-slate-800 dark:bg-slate-950/95"
+    class="sticky top-0 z-10 border-b border-slate-200 bg-slate-50/95 px-4 py-3 backdrop-blur dark:border-slate-800 dark:bg-slate-950/95"
     @submit.prevent="submit"
   >
     <div class="mx-auto flex max-w-4xl items-end gap-2">

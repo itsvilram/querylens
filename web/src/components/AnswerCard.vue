@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, defineAsyncComponent, ref } from 'vue'
+import { computed, defineAsyncComponent, h, ref } from 'vue'
 
 import type { Answer, Chart } from '@/api/types'
 import { formatCell, formatMs } from '@/lib/format'
@@ -8,7 +8,13 @@ import ResultTable from './ResultTable.vue'
 import SqlView from './SqlView.vue'
 
 // Chart.js is only downloaded when a chart is shown.
-const ResultChart = defineAsyncComponent(() => import('./ResultChart.vue'))
+// Until it has loaded, an empty box of the chart's exact height holds its place,
+// so the page doesn't jump when the chart appears.
+const ResultChart = defineAsyncComponent({
+  loader: () => import('./ResultChart.vue'),
+  loadingComponent: { render: () => h('div', { class: 'h-72 w-full', 'aria-hidden': 'true' }) },
+  delay: 0,
+})
 
 const props = defineProps<{ answer: Answer }>()
 

@@ -18,25 +18,35 @@ const chat = useChatStore()
 const { ask } = useAsk()
 const health = useHealth()
 
-// Bring each new question into view (instantly if the user prefers less motion).
+// Bring the newest question into view, just below the pinned question box
+// (instantly if the user prefers less motion): when it is asked, and again
+// when its answer arrives, since the answer makes the page taller.
 const list = ref<HTMLOListElement | null>(null)
+async function showNewest() {
+  await nextTick()
+  const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
+  list.value?.lastElementChild?.scrollIntoView({
+    behavior: reduce ? 'auto' : 'smooth',
+    block: 'start',
+  })
+}
 watch(
   () => chat.turns.length,
-  async (count, before) => {
-    if (count <= before) return
-    await nextTick()
-    const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
-    list.value?.lastElementChild?.scrollIntoView({
-      behavior: reduce ? 'auto' : 'smooth',
-      block: 'start',
-    })
+  (count, before) => {
+    if (count > before) void showNewest()
+  },
+)
+watch(
+  () => chat.turns.at(-1)?.status,
+  (status, before) => {
+    if (before === 'running' && status !== 'running') void showNewest()
   },
 )
 </script>
 
 <template>
   <section aria-label="Conversation" class="mx-auto w-full max-w-4xl px-4 py-6">
-    <div v-if="!chat.turns.length" class="space-y-4 py-8">
+    <div v-if="!chat.turns.length" class="space-y-4 py-2">
       <h2 class="text-xl font-semibold">Ask about the Pagila DVD-rental database</h2>
       <p class="text-slate-700 dark:text-slate-300">
         Films, actors, customers, rentals and payments from 2022 to 2026. QueryLens writes the SQL,
@@ -76,7 +86,8 @@ watch(
     </div>
 
     <ol v-else ref="list" class="space-y-8">
-      <li v-for="turn in chat.turns" :key="turn.id" class="scroll-mt-4">
+      <!-- scroll-mt: a new turn scrolls into view just below the pinned question box -->
+      <li v-for="turn in chat.turns" :key="turn.id" class="scroll-mt-48">
         <ChatTurn :turn="turn" />
       </li>
     </ol>

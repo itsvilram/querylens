@@ -83,10 +83,11 @@ function closeSchema() {
 
     <div class="mx-auto flex w-full max-w-7xl flex-1">
       <main class="flex min-w-0 flex-1 flex-col">
+        <!-- The question box first: it stays pinned at the top while the answers scroll. -->
+        <AskForm ref="form" />
         <div class="flex-1">
           <ChatThread />
         </div>
-        <AskForm ref="form" />
       </main>
 
       <aside

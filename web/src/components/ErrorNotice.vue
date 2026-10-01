@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref } from 'vue'
 
+import type { ModelInfo } from '@/api/client'
 import type { ApiErrorBody } from '@/api/types'
 
-const props = defineProps<{ error: ApiErrorBody }>()
-const emit = defineEmits<{ retry: [] }>()
+// alternative: another model to offer, e.g. when this one's daily quota is used up.
+const props = defineProps<{ error: ApiErrorBody; alternative?: ModelInfo | null }>()
+const emit = defineEmits<{ retry: []; retryWith: [model: string] }>()
 
 const TITLES: Record<string, string> = {
   rate_limited: 'Slow down a little',
@@ -44,6 +46,14 @@ onBeforeUnmount(() => clearInterval(timer))
     <p class="font-semibold">{{ title }}</p>
     <p class="mt-1 text-sm">{{ error.message }}</p>
     <div class="mt-3 flex flex-wrap items-center gap-3">
+      <button
+        v-if="alternative"
+        type="button"
+        class="rounded-md bg-indigo-600 px-3 py-1 text-sm font-medium text-white hover:bg-indigo-700"
+        @click="emit('retryWith', alternative.id)"
+      >
+        Try with {{ alternative.label }}
+      </button>
       <button
         type="button"
         :disabled="secondsLeft > 0"

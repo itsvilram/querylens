@@ -1,15 +1,33 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref, useId, watch } from 'vue'
 
 import { useAsk } from '@/composables/useAskStream'
 import { useHealth } from '@/composables/useHealth'
 import { useChatStore } from '@/stores/chat'
+import { useModelStore } from '@/stores/model'
 
 const MAX_LENGTH = 500 // the API's limit
 
 const chat = useChatStore()
 const { ask, cancel } = useAsk()
 const health = useHealth()
+const models = useModelStore()
+const modelId = useId()
+
+// The model switch: only when the server offers more than one (e.g. Gemini and Groq).
+const options = computed(() => health.data.value?.models ?? [])
+const selected = computed({
+  get: () => models.choice ?? health.data.value?.default_model ?? '',
+  set: (id: string) => {
+    models.choice = id === health.data.value?.default_model ? null : id
+  },
+})
+// A remembered choice this server doesn't offer (any more) falls back to its default.
+watch(options, (list) => {
+  if (models.choice && list.length && !list.some((m) => m.id === models.choice)) {
+    models.choice = null
+  }
+})
 const text = ref('')
 const box = ref<HTMLTextAreaElement | null>(null)
 
@@ -39,6 +57,18 @@ defineExpose({ focus: () => box.value?.focus() })
   >
     <div class="mx-auto flex max-w-4xl items-end gap-2">
       <div class="flex-1">
+        <div v-if="options.length > 1" class="mb-2 flex items-center gap-2 text-sm">
+          <label :for="modelId" class="text-slate-600 dark:text-slate-400">Model</label>
+          <select
+            :id="modelId"
+            v-model="selected"
+            class="rounded-md border border-slate-300 bg-white px-2 py-1 dark:border-slate-700 dark:bg-slate-900"
+          >
+            <option v-for="option in options" :key="option.id" :value="option.id">
+              {{ option.label }}
+            </option>
+          </select>
+        </div>
         <label for="question" class="sr-only">Your question</label>
         <textarea
           id="question"

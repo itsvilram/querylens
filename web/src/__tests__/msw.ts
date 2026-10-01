@@ -49,12 +49,19 @@ export const ANSWER: Answer = {
   db_ms: 3.2,
   cache: 'miss',
   tokens: 900,
+  model_id: 'gemini',
   elapsed_ms: 120,
 }
 
 export const server = setupServer(
   http.get('*/api/health', () =>
-    HttpResponse.json({ status: 'ok', llm_mode: 'real', demo: false }),
+    HttpResponse.json({
+      status: 'ok',
+      llm_mode: 'real',
+      demo: false,
+      models: [{ id: 'gemini', label: 'Gemini 3.5 Flash Lite' }],
+      default_model: 'gemini',
+    }),
   ),
   http.get('*/api/schema', () => HttpResponse.json(SCHEMA)),
 )

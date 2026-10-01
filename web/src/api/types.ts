@@ -31,6 +31,7 @@ export interface Answer {
   db_ms: number
   cache: CacheStatus
   tokens: number
+  model_id: string // which of the server's models answered ("gemini", "groq", ...)
   elapsed_ms: number
 }
 

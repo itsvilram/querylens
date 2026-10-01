@@ -35,10 +35,17 @@ export async function toApiError(response: Response): Promise<ApiError> {
   })
 }
 
+export interface ModelInfo {
+  id: string // what to send as "model" with a question
+  label: string
+}
+
 export interface Health {
   status: 'ok'
   llm_mode: 'fake' | 'real' // fake: no AI key on the server, only the demo questions work
   demo: boolean // the public demo: tell visitors where their questions go
+  models: ModelInfo[] // the models a visitor can pick, the default first
+  default_model: string | null
 }
 
 export async function fetchHealth(signal?: AbortSignal): Promise<Health> {

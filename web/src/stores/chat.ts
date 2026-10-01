@@ -9,6 +9,7 @@ export type TurnStatus = 'running' | 'done' | 'error' | 'cancelled'
 export interface Turn {
   id: string
   question: string
+  model: string | null // the model it asked (null = the server's default)
   status: TurnStatus
   stages: Stage[] // in the order the server reported them
   answer: Answer | null
@@ -29,9 +30,17 @@ export const useChatStore = defineStore('chat', () => {
     return turns.value.find((turn) => turn.id === id)
   }
 
-  function start(question: string): string {
+  function start(question: string, model: string | null = null): string {
     const id = newId()
-    turns.value.push({ id, question, status: 'running', stages: [], answer: null, error: null })
+    turns.value.push({
+      id,
+      question,
+      model,
+      status: 'running',
+      stages: [],
+      answer: null,
+      error: null,
+    })
     return id
   }
 

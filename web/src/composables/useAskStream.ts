@@ -4,6 +4,7 @@ import { toApiError } from '@/api/client'
 import { readSse } from '@/api/sse'
 import type { Answer, ApiErrorBody, Stage } from '@/api/types'
 import { useChatStore } from '@/stores/chat'
+import { useModelStore } from '@/stores/model'
 
 const CONNECTION_LOST: ApiErrorBody = {
   code: 'connection_lost',
@@ -25,18 +26,24 @@ const NETWORK_ERROR: ApiErrorBody = {
  */
 export function useAskStream() {
   const chat = useChatStore()
+  const models = useModelStore()
   let controller: AbortController | null = null
 
   async function ask(question: string): Promise<void> {
     const text = question.trim()
     if (!text || chat.busy) return
-    const id = chat.start(text)
+    const model = models.choice // null: the server's default
+    const id = chat.start(text, model)
     controller = new AbortController()
     try {
       const response = await fetch('/api/ask/stream', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
-        body: JSON.stringify({ question: text, session_id: chat.sessionId }),
+        body: JSON.stringify({
+          question: text,
+          session_id: chat.sessionId,
+          ...(model ? { model } : {}),
+        }),
         signal: controller.signal,
       })
       if (!response.ok || !response.body) {

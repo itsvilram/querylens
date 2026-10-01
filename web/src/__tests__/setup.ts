@@ -9,5 +9,6 @@ beforeAll(() => server.listen({ onUnhandledRequest: 'error' }))
 afterEach(() => {
   server.resetHandlers() // drop handlers a test added with server.use()
   cleanup() // unmount what Testing Library rendered
+  localStorage.clear() // remembered theme and model choices
 })
 afterAll(() => server.close())

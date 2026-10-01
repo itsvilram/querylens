@@ -28,9 +28,9 @@ from app.db.schema import foreign_key_edges, format_schema, read_schema
 from app.embed.base import Embedder
 from app.errors import install_error_handling
 from app.llm.base import LLMClient
-from app.llm.factory import build_llm
+from app.llm.factory import ModelOption, build_llms
 from app.pipeline.cache_key import pipeline_fingerprint
-from app.pipeline.orchestrator import PipelineDeps
+from app.pipeline.orchestrator import ModelChoice, PipelineDeps
 from app.pipeline.retrieve import Retriever
 from app.store.answer_cache import AnswerCache
 from app.store.budget import TokenBudget
@@ -44,7 +44,10 @@ def create_app(
     settings: Settings | None = None,
     llm: LLMClient | None = None,
     embedder: Embedder | None = None,
+    models: list[ModelOption] | None = None,
 ) -> FastAPI:
+    """llm: one client to use for every question (tests). models: several (tests).
+    Neither: the clients the settings allow (app/llm/factory.py)."""
     config = settings or get_settings()
 
     @asynccontextmanager
@@ -56,8 +59,15 @@ def create_app(
             stack.push_async_callback(pool.close)
             redis: Redis = Redis.from_url(config.redis_url)
             stack.push_async_callback(redis.aclose)
-            client = llm or build_llm(config)
-            stack.push_async_callback(client.aclose)
+            if models:
+                options = models
+            elif llm:
+                one = "fake" if config.llm_mode == "fake" else config.llm_provider
+                options = [ModelOption(one, "Test model", llm)]
+            else:
+                options = build_llms(config)
+            for option in options:
+                stack.push_async_callback(option.client.aclose)
 
             retriever = None
             if config.schema_mode == "retrieved":
@@ -84,11 +94,25 @@ def create_app(
             schema_text = format_schema(app.state.schema_tables)  # the prompt
             app.state.deps = PipelineDeps(
                 settings=config,
-                llm=client,
+                models={
+                    option.id: ModelChoice(
+                        id=option.id,
+                        label=option.label,
+                        client=option.client,
+                        # Each model has its own daily budget: they have separate free quotas.
+                        budget=TokenBudget(
+                            redis,
+                            config.daily_token_budget,
+                            key_prefix=config.redis_key_prefix,
+                            scope=option.id,
+                        ),
+                        cache_fingerprint=pipeline_fingerprint(
+                            schema_text=schema_text, model=option.client.model, settings=config
+                        ),
+                    )
+                    for option in options
+                },
                 pool=pool,
-                budget=TokenBudget(
-                    redis, config.daily_token_budget, key_prefix=config.redis_key_prefix
-                ),
                 conversations=ConversationStore(
                     redis,
                     ttl_s=config.conversation_ttl_s,
@@ -102,9 +126,6 @@ def create_app(
                 )
                 if config.answer_cache_ttl_s > 0
                 else None,
-                cache_fingerprint=pipeline_fingerprint(
-                    schema_text=schema_text, model=client.model, settings=config
-                ),
             )
 
             rules = [

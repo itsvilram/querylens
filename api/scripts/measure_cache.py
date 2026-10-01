@@ -62,7 +62,8 @@ def main() -> None:
 
     miss = statistics.median(r["miss_ms"] for r in rows)
     hit = statistics.median(r["hit_ms_median"] for r in rows)
-    print(f"model: {settings.llm_model} (LLM_MODE={settings.llm_mode})\n")
+    model = settings.model_for(settings.llm_provider)  # the default model answers
+    print(f"model: {model} (LLM_MODE={settings.llm_mode})\n")
     print("| Question | Miss (ms) | Hit, median of 5 (ms) |\n|---|---:|---:|")
     for r in rows:
         print(f"| {r['question']} | {r['miss_ms']:.0f} | {r['hit_ms_median']:.1f} |")
@@ -73,7 +74,7 @@ def main() -> None:
             {
                 "measured_at": datetime.now(UTC).isoformat(timespec="seconds"),
                 "llm_mode": settings.llm_mode,
-                "model": settings.llm_model,
+                "model": model,
                 "hits_per_question": HITS,
                 "median_miss_ms": miss,
                 "median_hit_ms": hit,

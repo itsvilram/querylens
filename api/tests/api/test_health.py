@@ -10,7 +10,14 @@ def test_health_says_ok() -> None:
     response = TestClient(create_app(Settings(llm_mode="fake"))).get("/api/health")
 
     assert response.status_code == 200
-    assert response.json() == {"status": "ok", "llm_mode": "fake", "demo": False}
+    # Not started up (no lifespan here), so no models are loaded yet.
+    assert response.json() == {
+        "status": "ok",
+        "llm_mode": "fake",
+        "demo": False,
+        "models": [],
+        "default_model": None,
+    }
 
 
 def test_health_tells_the_ui_when_this_is_the_public_demo() -> None:

@@ -36,14 +36,16 @@ class TokenBudget:
         daily_limit: int,
         today: Callable[[], date] = utc_today,
         key_prefix: str = "",  # e.g. "ql:" when the Redis database is shared with another app
+        scope: str = "",  # e.g. the model id: each model gets its own daily budget
     ) -> None:
         self._redis = redis
         self._daily_limit = daily_limit
         self._today = today  # tests pass a fixed date
         self._prefix = key_prefix
+        self._scope = f"{scope}:" if scope else ""
 
     def _key(self) -> str:
-        return f"{self._prefix}budget:tokens:{self._today().isoformat()}"
+        return f"{self._prefix}budget:tokens:{self._scope}{self._today().isoformat()}"
 
     async def reserve(self, estimate: int) -> Reservation:
         key = self._key()

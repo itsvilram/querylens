@@ -27,7 +27,13 @@ from app.errors import PublicError, log, request_id
 from app.llm.base import LLMError, LLMRateLimited
 from app.pipeline.execute import ExecutionError
 from app.pipeline.generate import GenerationError
-from app.pipeline.orchestrator import Answer, AnswerData, PipelineDeps, answer_question
+from app.pipeline.orchestrator import (
+    Answer,
+    AnswerData,
+    PipelineDeps,
+    UnknownModel,
+    answer_question,
+)
 from app.pipeline.progress import Stage
 from app.pipeline.validate import SqlRejected
 from app.store.budget import BudgetExceeded
@@ -41,6 +47,8 @@ class AskRequest(BaseModel):
     # One id per chat, made by the browser (a UUID). With it, follow-ups like
     # "only for store 2" are understood from the earlier questions.
     session_id: str | None = Field(default=None, pattern=r"^[A-Za-z0-9-]{16,64}$")
+    # Which of the server's models to use (GET /api/health lists them); None = the default.
+    model: str | None = Field(default=None, pattern=r"^[a-z0-9-]{1,32}$")
 
 
 class AskResponse(AnswerData):
@@ -48,6 +56,7 @@ class AskResponse(AnswerData):
     standalone_question: str  # how a follow-up was understood (= question if no rewrite)
     cache: Literal["hit", "miss", "coalesced", "off"]
     tokens: int  # LLM tokens this request spent (0 for a cached answer to a first question)
+    model_id: str  # which of the server's models answered ("gemini", "groq", ...)
     elapsed_ms: float  # time spent on the server
 
 
@@ -93,6 +102,8 @@ async def enforce_rate_limit(request: Request) -> None:
 
 def to_public_error(error: Exception, rid: str) -> PublicError | None:
     """The safe version of a pipeline error. None means unexpected: a bug."""
+    if isinstance(error, UnknownModel):
+        return PublicError(422, "unknown_model", "That model is not available on this server.")
     if isinstance(error, BudgetExceeded):
         return PublicError(
             503, "daily_budget_used", "Today's AI budget is used up. Please try again tomorrow."
@@ -143,6 +154,7 @@ def _response(body: AskRequest, answer: Answer, started: float) -> AskResponse:
         standalone_question=answer.standalone_question,
         cache=answer.cache,
         tokens=answer.tokens,
+        model_id=answer.model_id,
         elapsed_ms=round((time.perf_counter() - started) * 1000, 1),
     )
 
@@ -153,7 +165,7 @@ async def ask(
 ) -> AskResponse:
     started = time.perf_counter()
     try:
-        answer = await answer_question(body.question, deps, body.session_id)
+        answer = await answer_question(body.question, deps, body.session_id, model=body.model)
     except Exception as error:
         public = to_public_error(error, request_id(request))
         if public is None:
@@ -179,7 +191,9 @@ async def ask_stream(
 
     async def run() -> None:
         try:
-            answer = await answer_question(body.question, deps, body.session_id, progress=report)
+            answer = await answer_question(
+                body.question, deps, body.session_id, progress=report, model=body.model
+            )
             await events.put(ServerSentEvent(event="answer", data=_response(body, answer, started)))
         except Exception as error:
             public = to_public_error(error, rid)

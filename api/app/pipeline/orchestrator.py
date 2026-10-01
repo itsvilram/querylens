@@ -41,17 +41,34 @@ from app.store.budget import TokenBudget
 from app.store.conversations import ConversationStore, Turn
 
 
+@dataclass(frozen=True)
+class ModelChoice:
+    """One model a visitor can pick, with its own daily budget and cache entries."""
+
+    id: str  # what the browser sends: "gemini", "groq", "fake"
+    label: str
+    client: LLMClient
+    budget: TokenBudget
+    cache_fingerprint: str  # schema + prompt + this model + settings (app/pipeline/cache_key.py)
+
+
+class UnknownModel(Exception):
+    """The request named a model this server doesn't offer."""
+
+
 @dataclass
 class PipelineDeps:
     settings: Settings
-    llm: LLMClient
+    models: dict[str, ModelChoice]  # the default first
     pool: asyncpg.Pool[asyncpg.Record]
-    budget: TokenBudget
     conversations: ConversationStore
     schema_text: str  # the full schema
     retriever: Retriever | None = None  # set when SCHEMA_MODE=retrieved
     cache: AnswerCache | None = None  # None = no answer cache
-    cache_fingerprint: str = ""  # schema + prompt + model + settings (app/pipeline/cache_key.py)
+
+    @property
+    def default_model(self) -> str:
+        return next(iter(self.models))
 
 
 class ColumnOut(BaseModel):
@@ -80,6 +97,7 @@ class Answer:
     data: AnswerData
     cache: CacheStatus | Literal["off"]
     tokens: int  # LLM tokens THIS request spent (a cache hit spends none on SQL)
+    model_id: str  # which of the server's models answered ("gemini", "groq", ...)
 
 
 async def answer_question(
@@ -87,9 +105,14 @@ async def answer_question(
     deps: PipelineDeps,
     session_id: str | None = None,
     progress: Progress = no_progress,
+    model: str | None = None,
 ) -> Answer:
-    """session_id: the chat this question belongs to (None = no chat history)."""
-    llm = BudgetedLLM(deps.llm, deps.budget)
+    """session_id: the chat this question belongs to (None = no chat history).
+    model: one of deps.models (None = the default)."""
+    choice = deps.models.get(model or deps.default_model)
+    if choice is None:
+        raise UnknownModel(model)
+    llm = BudgetedLLM(choice.client, choice.budget)
     history = await deps.conversations.history(session_id) if session_id else []
     if history:
         await progress("rewrite")
@@ -111,7 +134,7 @@ async def answer_question(
     if deps.cache is None:
         text, cache_status = await compute(), "off"
     else:
-        key = answer_cache_key(standalone, deps.cache_fingerprint)
+        key = answer_cache_key(standalone, choice.cache_fingerprint)
         text, cache_status = await deps.cache.get_or_compute(key, compute, on_wait=announce_wait)
     data = AnswerData.model_validate_json(text)
 
@@ -119,7 +142,13 @@ async def answer_question(
         # Only answered questions become history: a declined or failed one
         # would only confuse the next rewrite.
         await deps.conversations.add(session_id, Turn(question, standalone))
-    return Answer(standalone_question=standalone, data=data, cache=cache_status, tokens=tokens)
+    return Answer(
+        standalone_question=standalone,
+        data=data,
+        cache=cache_status,
+        tokens=tokens,
+        model_id=choice.id,
+    )
 
 
 async def _run_pipeline(

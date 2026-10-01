@@ -11,10 +11,21 @@ from typing import Literal
 from pydantic import IPvAnyNetwork, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+type Provider = Literal["gemini", "groq"]
+
 # OpenAI-compatible endpoints. Switching provider is a settings change, not code.
-PROVIDER_BASE_URLS = {
+PROVIDER_BASE_URLS: dict[Provider, str] = {
     "gemini": "https://generativelanguage.googleapis.com/v1beta/openai/",
     "groq": "https://api.groq.com/openai/v1/",
+}
+
+# The names the UI shows for the models we use (anything else shows its id).
+MODEL_LABELS = {
+    "gemini-3.5-flash-lite": "Gemini 3.5 Flash Lite",
+    "gemini-3.1-flash-lite": "Gemini 3.1 Flash Lite",
+    "gemini-3.8-flash": "Gemini 3.8 Flash",
+    "openai/gpt-oss-120b": "GPT-OSS 120B (Groq)",
+    "openai/gpt-oss-20b": "GPT-OSS 20B (Groq)",
 }
 
 
@@ -29,9 +40,11 @@ class Settings(BaseSettings):
     gemini_api_key: SecretStr | None = None
     groq_api_key: SecretStr | None = None
 
-    # The model the app uses (PLAN.md §0: one model per job), pinned here.
-    llm_provider: Literal["gemini", "groq"] = "gemini"
-    llm_model: str = "gemini-3.5-flash-lite"
+    # The app offers every provider that has a key; visitors can pick one per
+    # question. llm_provider answers when they don't (it is the eval's model).
+    llm_provider: Provider = "gemini"
+    gemini_model: str = "gemini-3.5-flash-lite"
+    groq_model: str = "openai/gpt-oss-120b"  # free: 1,000 requests and 200K tokens a day
     # Gemini 3.x can't switch reasoning off; "low" keeps it short and cheap.
     llm_reasoning_effort: Literal["minimal", "low", "medium", "high"] | None = "low"
     llm_timeout_s: float = 60.0
@@ -100,8 +113,11 @@ class Settings(BaseSettings):
     # The public demo: the UI tells visitors their questions go to the LLM provider.
     demo_mode: bool = False
 
-    def llm_api_key(self) -> SecretStr | None:
-        return self.gemini_api_key if self.llm_provider == "gemini" else self.groq_api_key
+    def api_key_for(self, provider: Provider) -> SecretStr | None:
+        return self.gemini_api_key if provider == "gemini" else self.groq_api_key
+
+    def model_for(self, provider: Provider) -> str:
+        return self.gemini_model if provider == "gemini" else self.groq_model
 
 
 @lru_cache

@@ -7,7 +7,7 @@ import pytest
 from pydantic import SecretStr
 
 from app.config import Settings
-from app.llm.factory import build_llm
+from app.llm.factory import build_llms
 from app.llm.fake import FakeLLM
 from app.llm.openai_compat import OpenAICompatibleClient
 from app.pipeline.serialize import to_json_value
@@ -33,21 +33,42 @@ def test_database_values_become_json_values(value: object, expected: object) -> 
     assert to_json_value(value) == expected
 
 
-def test_fake_mode_needs_no_key() -> None:
-    assert isinstance(build_llm(Settings(llm_mode="fake")), FakeLLM)
+def real(**keys: str | None) -> Settings:
+    """Real mode with exactly these keys (both set explicitly: api/.env must not leak in)."""
+    values = {"gemini_api_key": None, "groq_api_key": None} | keys
+    secrets = {k: SecretStr(v) if v else None for k, v in values.items()}
+    return Settings(llm_mode="real", **secrets)  # type: ignore[arg-type]
 
 
-def test_real_mode_without_a_key_fails_with_a_clear_message() -> None:
-    settings = Settings(llm_mode="real", llm_provider="gemini", gemini_api_key=None)
+def test_fake_mode_offers_the_scripted_model_and_needs_no_key() -> None:
+    (option,) = build_llms(Settings(llm_mode="fake"))
 
+    assert option.id == "fake"
+    assert isinstance(option.client, FakeLLM)
+
+
+def test_real_mode_without_any_key_fails_with_a_clear_message() -> None:
     with pytest.raises(RuntimeError, match="GEMINI_API_KEY"):
-        build_llm(settings)
+        build_llms(real())
 
 
-def test_real_mode_with_a_key_builds_the_http_client() -> None:
-    settings = Settings(llm_mode="real", gemini_api_key=SecretStr("not-a-real-key"))
+def test_each_provider_with_a_key_is_offered_the_default_first() -> None:
+    options = build_llms(real(gemini_api_key="not-a-real-key", groq_api_key="not-a-real-key"))
 
-    client = build_llm(settings)
+    assert [(o.id, o.label, o.client.model) for o in options] == [
+        ("gemini", "Gemini 3.5 Flash Lite", "gemini-3.5-flash-lite"),
+        ("groq", "GPT-OSS 120B (Groq)", "openai/gpt-oss-120b"),
+    ]
+    assert all(isinstance(o.client, OpenAICompatibleClient) for o in options)
 
-    assert isinstance(client, OpenAICompatibleClient)
-    assert client.model == "gemini-3.5-flash-lite"
+
+def test_a_provider_without_a_key_is_not_offered() -> None:
+    assert [o.id for o in build_llms(real(gemini_api_key="k"))] == ["gemini"]
+    assert [o.id for o in build_llms(real(groq_api_key="k"))] == ["groq"]  # even if not default
+
+
+def test_the_default_provider_comes_first() -> None:
+    settings = real(gemini_api_key="k", groq_api_key="k")
+    settings.llm_provider = "groq"
+
+    assert [o.id for o in build_llms(settings)] == ["groq", "gemini"]

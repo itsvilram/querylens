@@ -4,6 +4,8 @@
 
 Ask a database questions in plain English. QueryLens writes the SQL, checks that it is safe, runs it as a read-only user, and shows the SQL, a table and a chart, with live progress while it works. Follow-up questions like "only for store 2" are understood from the chat.
 
+**Live demo: [querylens-orcin.vercel.app](https://querylens-orcin.vercel.app)** (Gemini free tier: a small daily quota, so it may ask you to try again later).
+
 ![QueryLens answering "Which film categories made the most money in 2024?" with a bar chart, the result table and the schema panel](docs/images/querylens-answer.png)
 
 <sub>A real answer (dev model `gemini-3.1-flash-lite`) on the Pagila demo database.</sub>
@@ -113,6 +115,10 @@ The model is treated as untrusted input. Every layer has tests (`api/tests/`).
 | Token budget | A daily token cap in Redis: an estimate is reserved with `INCRBY` before each LLM call and corrected after, so parallel requests can't overspend. |
 | Secrets and errors | The API key stays on the server. Clients get a safe message and a request id; details go to the log. A test checks no response ever contains the key. |
 | Input and CORS | Questions of 1–500 characters, a checked session id format, CORS limited to an allow-list (empty by default). |
+
+## Hosted demo
+
+The live demo runs on free tiers: **Vercel** (one project with `api/` as its root: the FastAPI app in Mumbai, the built Vue app on Vercel's CDN, same domain), **Neon** (Postgres 18 with the same Pagila data and read-only role, see [`db/neon/`](db/neon)) and **Upstash** Redis (shared with another app, so every key starts with `ql:`). It runs with `DEMO_MODE` (the page says questions go to Google's free tier), a lower daily token budget and a 5-per-minute limit. Vercel replaces `X-Forwarded-For`/`x-real-ip` with the real client address, so the rate limit reads `x-real-ip` (`CLIENT_IP_HEADER`); faked headers were tested against the live site and are ignored.
 
 ## Run it locally
 

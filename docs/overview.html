@@ -419,6 +419,7 @@
           <text x="708" y="396" class="d-label">SQL</text>
         </svg>
       </div>
+      <p class="caption"><b>Hosted demo</b> (<a href="https://querylens-orcin.vercel.app">querylens-orcin.vercel.app</a>): the same code on free tiers. Vercel runs the FastAPI app as one function in Mumbai and serves the built Vue app from its CDN on the same domain; Neon hosts Postgres 18 with the same data and read-only role; Upstash hosts Redis, shared with another app, so every key starts with <code>ql:</code>. Vercel overwrites the client-IP headers, so the rate limit reads <code>x-real-ip</code>.</p>
       <p class="caption">Only the LLM client talks to the provider, and only the server knows the key. The embedder runs inside the API process, so retrieval needs no network call. Two database users: <code>querylens_app</code> reads the schema descriptions, <code>ro_user</code> runs the generated SQL. All shared state is in Redis, so more API processes can run side by side.</p>
     </section>
 

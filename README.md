@@ -17,11 +17,12 @@ Ask a database questions in plain English. QueryLens writes the SQL, checks that
 - **Schema retrieval (RAG)** with local embeddings and pgvector, and **self-correction**, both measured, not assumed.
 - **Redis patterns:** answer cache (5 ms vs 1.4 s), request coalescing with a lock, a sliding-window rate limit in one Lua script, chat history with a TTL, and a daily token budget that reserves before each call.
 - **Live progress over SSE** read with `fetch()` in a Vue 3 app, tested with Vitest + MSW and end-to-end with Playwright.
+- **Pick the model per question:** Gemini (`gemini-3.5-flash-lite`, the default) or Groq (`openai/gpt-oss-120b`), each with its own free quota, daily budget and cache. When one model's daily quota runs out, the error offers the other.
 
 ## Stack
 
 Vue 3 (Composition API) + TypeScript + Vite · Pinia · TanStack Query / Table · Chart.js · Shiki · Tailwind ·
-Python 3.12 + FastAPI · sqlglot · asyncpg · PostgreSQL 18 + pgvector · Redis · fastembed · Gemini API (free tier) ·
+Python 3.12 + FastAPI · sqlglot · asyncpg · PostgreSQL 18 + pgvector · Redis · fastembed · Gemini and Groq APIs (free tiers) ·
 Docker Compose · GitHub Actions
 
 ## How it works
@@ -118,7 +119,7 @@ The model is treated as untrusted input. Every layer has tests (`api/tests/`).
 
 ## Hosted demo
 
-The live demo runs on free tiers: **Vercel** (one project with `api/` as its root: the FastAPI app in Mumbai, the built Vue app on Vercel's CDN, same domain), **Neon** (Postgres 18 with the same Pagila data and read-only role, see [`db/neon/`](db/neon)) and **Upstash** Redis (shared with another app, so every key starts with `ql:`). It runs with `DEMO_MODE` (the page says questions go to Google's free tier), a lower daily token budget and a 5-per-minute limit. Vercel replaces `X-Forwarded-For`/`x-real-ip` with the real client address, so the rate limit reads `x-real-ip` (`CLIENT_IP_HEADER`); faked headers were tested against the live site and are ignored.
+The live demo runs on free tiers: **Vercel** (one project with `api/` as its root: the FastAPI app in Mumbai, the built Vue app on Vercel's CDN, same domain), **Neon** (Postgres 18 with the same Pagila data and read-only role, see [`db/neon/`](db/neon)) and **Upstash** Redis (shared with another app, so every key starts with `ql:`). Visitors can switch between Gemini and Groq. It runs with `DEMO_MODE` (the page says questions go to Google's free tier), a lower daily token budget and a 5-per-minute limit. Vercel replaces `X-Forwarded-For`/`x-real-ip` with the real client address, so the rate limit reads `x-real-ip` (`CLIENT_IP_HEADER`); faked headers were tested against the live site and are ignored.
 
 ## Run it locally
 

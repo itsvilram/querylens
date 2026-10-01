@@ -97,6 +97,13 @@ def to_public_error(error: Exception, rid: str) -> PublicError | None:
         return PublicError(
             503, "daily_budget_used", "Today's AI budget is used up. Please try again tomorrow."
         )
+    if isinstance(error, LLMRateLimited) and error.daily:
+        return PublicError(
+            503,
+            "daily_budget_used",
+            "The AI's free daily quota is used up. It resets once a day "
+            "(midnight US Pacific time), so please try again later.",
+        )
     if isinstance(error, LLMRateLimited):
         headers = (
             {"Retry-After": str(math.ceil(error.retry_after_s))} if error.retry_after_s else {}

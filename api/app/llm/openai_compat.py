@@ -62,7 +62,9 @@ class OpenAICompatibleClient:
 
         response = await self._post_with_retries(body)
         if response.status_code == 429:
-            raise LLMRateLimited(_seconds(response.headers.get("retry-after")))
+            raise LLMRateLimited(
+                _seconds(response.headers.get("retry-after")), daily=_is_daily_quota(response.text)
+            )
         if response.status_code >= 400:
             raise LLMError(f"The LLM provider answered HTTP {response.status_code}.")
         return self._read(response)
@@ -99,6 +101,12 @@ class OpenAICompatibleClient:
 
     async def aclose(self) -> None:
         await self._http.aclose()
+
+
+def _is_daily_quota(body: str) -> bool:
+    """Does a 429 name a per-day quota? Gemini says "GenerateRequestsPerDayPerProjectPerModel",
+    Groq "requests per day (RPD)". Its retry delay (seconds) would be misleading then."""
+    return "perday" in body.lower().replace(" ", "")
 
 
 def _seconds(retry_after: str | None) -> float | None:

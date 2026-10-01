@@ -92,6 +92,30 @@ async def test_429_becomes_rate_limited_with_the_retry_delay() -> None:
     assert caught.value.retry_after_s == 7
 
 
+# Shortened from a real Gemini free-tier reply (1 Oct 2026).
+GEMINI_DAILY_429 = (
+    '[{"error": {"code": 429, "message": "You exceeded your current quota", "details": '
+    '[{"violations": [{"quotaId": "GenerateRequestsPerDayPerProjectPerModel-FreeTier"}]}]}}]'
+)
+
+
+@pytest.mark.parametrize(
+    ("body", "daily"),
+    [
+        (GEMINI_DAILY_429, True),
+        ('{"error": {"message": "Rate limit reached on requests per day (RPD)"}}', True),  # Groq
+        ('{"error": {"message": "Too many requests, slow down"}}', False),  # per minute
+    ],
+)
+async def test_429_says_whether_the_daily_quota_is_gone(body: str, daily: bool) -> None:
+    client = client_with(lambda _: httpx2.Response(429, text=body))
+
+    with pytest.raises(LLMRateLimited) as caught:
+        await client.complete(MESSAGES, json_schema=SCHEMA, schema_name="x")
+
+    assert caught.value.daily is daily
+
+
 @pytest.mark.parametrize(
     "response",
     [

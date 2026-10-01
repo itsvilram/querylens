@@ -265,6 +265,17 @@ def test_provider_rate_limit_is_passed_on_with_retry_after() -> None:
         assert response.headers["Retry-After"] == "7"
 
 
+def test_provider_daily_quota_says_try_later_not_in_a_minute() -> None:
+    body = '{"error": {"details": [{"quotaId": "GenerateRequestsPerDayPerProjectPerModel"}]}}'
+    with client_for(provider_that_answers(httpx2.Response(429, text=body))) as client:
+        response = ask(client, "How many films are there?")
+
+        assert response.status_code == 503
+        assert response.json()["error"]["code"] == "daily_budget_used"
+        assert "daily quota" in response.json()["error"]["message"]
+        assert "Retry-After" not in response.headers
+
+
 # ---------------------------------------------------------------- schema panel
 
 

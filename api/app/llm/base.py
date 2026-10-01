@@ -33,11 +33,16 @@ class LLMError(Exception):
 
 
 class LLMRateLimited(LLMError):
-    """The provider said "too many requests" (HTTP 429)."""
+    """The provider said "too many requests" (HTTP 429).
 
-    def __init__(self, retry_after_s: float | None) -> None:
+    daily: the provider's quota for the whole day is used up, so waiting a
+    minute won't help (a free tier's requests-per-day limit).
+    """
+
+    def __init__(self, retry_after_s: float | None, *, daily: bool = False) -> None:
         super().__init__("The LLM provider is rate limiting us.")
         self.retry_after_s = retry_after_s
+        self.daily = daily
 
 
 class LLMClient(Protocol):

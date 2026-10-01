@@ -150,7 +150,7 @@ class PacedLLM:
                     messages, json_schema=json_schema, schema_name=schema_name
                 )
             except LLMRateLimited as error:
-                if attempt == 3:
+                if error.daily or attempt == 3:  # waiting won't bring today's quota back
                     raise StopRun from error
                 await asyncio.sleep(error.retry_after_s or 60)
                 continue

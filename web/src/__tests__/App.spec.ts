@@ -46,7 +46,9 @@ describe('App', () => {
     )
     renderApp()
 
-    expect(await screen.findByText(/Public demo: your questions are sent to Google/)).toBeTruthy()
+    expect(
+      await screen.findByText(/Public demo: your questions are sent to the AI provider/),
+    ).toBeTruthy()
     expect(screen.getByText(/Don.t type private data/)).toBeTruthy()
   })
 

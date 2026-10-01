@@ -22,6 +22,9 @@ const selected = computed({
     models.choice = id === health.data.value?.default_model ? null : id
   },
 })
+// Who receives the question, for the demo notice under the box.
+const PROVIDERS: Record<string, string> = { gemini: 'Google (Gemini)', groq: 'Groq' }
+const provider = computed(() => PROVIDERS[selected.value] ?? 'the AI provider')
 // A remembered choice this server doesn't offer (any more) falls back to its default.
 watch(options, (list) => {
   if (models.choice && list.length && !list.some((m) => m.id === models.choice)) {
@@ -89,7 +92,7 @@ defineExpose({ focus: () => box.value?.focus() })
           <span>{{ text.length }}/{{ MAX_LENGTH }}</span>
         </p>
         <p v-if="health.data.value?.demo" class="text-xs text-slate-600 dark:text-slate-400">
-          Questions go to Google&rsquo;s Gemini (free tier). Don&rsquo;t type private data.
+          Questions go to {{ provider }} (free tier). Don&rsquo;t type private data.
         </p>
       </div>
       <button

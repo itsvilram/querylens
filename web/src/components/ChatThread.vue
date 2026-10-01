@@ -79,9 +79,10 @@ watch(
         v-if="health.data.value?.demo"
         class="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100"
       >
-        Public demo: your questions are sent to Google&rsquo;s Gemini API on its free tier, where
-        Google may use them to improve its products. Please don&rsquo;t type anything private. There
-        is a small daily limit, so it may say &ldquo;try again tomorrow&rdquo;.
+        Public demo: your questions are sent to the AI provider of the model you pick (Google for
+        Gemini, Groq for GPT-OSS) on its free tier, where they may be used to improve its service.
+        Please don&rsquo;t type anything private. Each model has a small daily limit; when one is
+        used up, try the other.
       </p>
     </div>
 

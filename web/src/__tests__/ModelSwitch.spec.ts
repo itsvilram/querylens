@@ -65,6 +65,15 @@ describe('model switch', () => {
     expect(localStorage.getItem('querylens-model')).toBe('groq')
   })
 
+  it('names the provider the question goes to on the public demo', async () => {
+    server.use(http.get('*/api/health', () => HttpResponse.json({ ...TWO_MODELS, demo: true })))
+    const { user } = renderWith(AskForm)
+
+    expect(await screen.findByText(/Questions go to Google \(Gemini\)/)).toBeTruthy()
+    await user.selectOptions(screen.getByLabelText('Model'), 'groq')
+    expect(screen.getByText(/Questions go to Groq/)).toBeTruthy()
+  })
+
   it('is hidden when the server has only one model', async () => {
     renderWith(AskForm)
     await screen.findByLabelText('Your question')

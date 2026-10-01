@@ -49,6 +49,9 @@ class Settings(BaseSettings):
         "postgresql://querylens_app:app_dev@127.0.0.1:5432/pagila"
     )
     redis_url: str = "redis://127.0.0.1:6379/0"
+    # Put in front of every Redis key, e.g. "ql:", when the Redis database is
+    # shared with another app (a free Upstash plan allows only one database).
+    redis_key_prefix: str = ""
 
     # Schema retrieval (RAG): "full" sends every table; "retrieved" sends the
     # top-k tables for the question plus the tables that join them.

@@ -31,14 +31,22 @@ def utc_today() -> date:
 
 class TokenBudget:
     def __init__(
-        self, redis: Redis, daily_limit: int, today: Callable[[], date] = utc_today
+        self,
+        redis: Redis,
+        daily_limit: int,
+        today: Callable[[], date] = utc_today,
+        key_prefix: str = "",  # e.g. "ql:" when the Redis database is shared with another app
     ) -> None:
         self._redis = redis
         self._daily_limit = daily_limit
         self._today = today  # tests pass a fixed date
+        self._prefix = key_prefix
+
+    def _key(self) -> str:
+        return f"{self._prefix}budget:tokens:{self._today().isoformat()}"
 
     async def reserve(self, estimate: int) -> Reservation:
-        key = f"budget:tokens:{self._today().isoformat()}"
+        key = self._key()
         async with self._redis.pipeline(transaction=True) as pipe:
             pipe.incrby(key, estimate)
             pipe.expire(key, _TTL_SECONDS)
@@ -53,5 +61,5 @@ class TokenBudget:
         await self._redis.incrby(reservation.key, actual - reservation.estimate)
 
     async def used_today(self) -> int:
-        value = await self._redis.get(f"budget:tokens:{self._today().isoformat()}")
+        value = await self._redis.get(self._key())
         return int(value or 0)

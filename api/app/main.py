@@ -77,15 +77,20 @@ def create_app(
                 settings=config,
                 llm=client,
                 pool=pool,
-                budget=TokenBudget(redis, config.daily_token_budget),
+                budget=TokenBudget(
+                    redis, config.daily_token_budget, key_prefix=config.redis_key_prefix
+                ),
                 conversations=ConversationStore(
                     redis,
                     ttl_s=config.conversation_ttl_s,
                     max_turns=config.conversation_max_turns,
+                    key_prefix=config.redis_key_prefix,
                 ),
                 schema_text=schema_text,
                 retriever=retriever,
-                cache=AnswerCache(redis, ttl_s=config.answer_cache_ttl_s)
+                cache=AnswerCache(
+                    redis, ttl_s=config.answer_cache_ttl_s, key_prefix=config.redis_key_prefix
+                )
                 if config.answer_cache_ttl_s > 0
                 else None,
                 cache_fingerprint=pipeline_fingerprint(
@@ -98,7 +103,9 @@ def create_app(
                 RateRule("hour", config.rate_limit_per_hour, 3600),
             ]
             active = [rule for rule in rules if rule.limit > 0]
-            app.state.rate_limiter = RateLimiter(redis, active) if active else None
+            app.state.rate_limiter = (
+                RateLimiter(redis, active, key_prefix=config.redis_key_prefix) if active else None
+            )
             app.state.trusted_proxies = config.trusted_proxies
             yield
 

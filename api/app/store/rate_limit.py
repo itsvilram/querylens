@@ -85,8 +85,10 @@ class RateLimiter:
         redis: Redis,
         rules: list[RateRule],
         clock_ms: Callable[[], int] = lambda: time.time_ns() // 1_000_000,
+        key_prefix: str = "",  # e.g. "ql:" when the Redis database is shared with another app
     ) -> None:
         self._rules = rules
+        self._prefix = key_prefix
         self._clock_ms = clock_ms  # tests pass a fake clock
         self._script = redis.register_script(_SLIDING_WINDOW)
 
@@ -101,7 +103,7 @@ class RateLimiter:
             index = now // window_ms
             # {client} is a hash tag: all of a client's keys land on the same
             # Redis cluster node, which a multi-key script needs.
-            prefix = f"rl:{{{client}}}:{rule.name}"
+            prefix = f"{self._prefix}rl:{{{client}}}:{rule.name}"
             keys += [f"{prefix}:{index}", f"{prefix}:{index - 1}"]
             args += [rule.limit, window_ms, now - index * window_ms]
             windows.append((window_ms, now - index * window_ms))

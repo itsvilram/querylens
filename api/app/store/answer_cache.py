@@ -52,8 +52,10 @@ class AnswerCache:
         poll_s: float = 0.25,
         max_entry_bytes: int = 512_000,  # a huge result isn't worth keeping in memory
         clock: Callable[[], float] = time.monotonic,
+        key_prefix: str = "",  # e.g. "ql:" when the Redis database is shared with another app
     ) -> None:
         self._redis = redis
+        self._prefix = key_prefix
         self._ttl_s = ttl_s
         self._lock_ttl_ms = int(lock_ttl_s * 1000)
         self._wait_max_s = wait_max_s
@@ -71,6 +73,8 @@ class AnswerCache:
         """The cached answer for `key`, or compute (and cache) it.
 
         on_wait is called once if we have to wait for another request."""
+        lock_key = f"{self._prefix}lock:{key}"
+        key = self._prefix + key
         waited = False
         deadline = self._clock() + self._wait_max_s
         while True:
@@ -78,7 +82,7 @@ class AnswerCache:
             if cached is not None:
                 return await self._counted(_text(cached), "coalesced" if waited else "hit")
 
-            lock_key, token = f"lock:{key}", secrets.token_hex(8)
+            token = secrets.token_hex(8)
             if await self._redis.set(lock_key, token, nx=True, px=self._lock_ttl_ms):
                 try:
                     return await self._counted(await self._compute_and_store(key, compute), "miss")
@@ -93,7 +97,7 @@ class AnswerCache:
             await asyncio.sleep(self._poll_s)
 
     async def stats(self) -> dict[str, int]:
-        counts = await self._redis.hgetall(STATS_KEY)
+        counts = await self._redis.hgetall(self._prefix + STATS_KEY)
         return {_text(field): int(value) for field, value in counts.items()}
 
     async def _compute_and_store(self, key: str, compute: Callable[[], Awaitable[str]]) -> str:
@@ -105,7 +109,7 @@ class AnswerCache:
         return value
 
     async def _counted(self, value: str, status: CacheStatus) -> tuple[str, CacheStatus]:
-        await self._redis.hincrby(STATS_KEY, status, 1)
+        await self._redis.hincrby(self._prefix + STATS_KEY, status, 1)
         return value, status
 
 

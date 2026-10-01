@@ -12,6 +12,7 @@ from typing import Any
 import httpx2
 import pytest
 from fastapi.testclient import TestClient
+from redis import Redis
 
 from app.config import Settings
 from app.llm.fake import STORE_2_QUESTION, FakeLLM, fake_answer
@@ -245,3 +246,20 @@ def test_no_cross_site_calls_by_default() -> None:
         response = client.get("/api/health", headers={"Origin": "https://evil.example"})
 
         assert "access-control-allow-origin" not in response.headers
+
+
+# ---------------------------------------------------------------- sharing a Redis database
+
+
+def test_with_a_key_prefix_every_key_the_app_writes_carries_it() -> None:
+    """A free Upstash plan allows one database; QueryLens can share it with another app."""
+    with client_for(FakeLLM(), redis_key_prefix="ql:") as client:
+        chat = str(uuid.uuid4())
+        ask(client, FIRST, session_id=chat)  # rate limit, budget, cache, lock, stats, chat
+        ask(client, "Only for store 2", session_id=chat)
+        assert client.get("/api/stats").json()["answer_cache"]["miss"] == 2
+
+    keys = [k.decode() for k in Redis.from_url("redis://127.0.0.1:6379/15").scan_iter()]
+    assert keys, "the app wrote nothing to Redis"
+    assert all(k.startswith("ql:") for k in keys), [k for k in keys if not k.startswith("ql:")]
+    assert {k.split(":")[1] for k in keys} >= {"rl", "budget", "answer", "conv", "stats"}

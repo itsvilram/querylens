@@ -15,7 +15,7 @@ from app.db.schema import schema_version
 from app.llm.prompts import PROMPT_VERSION
 
 # Bump when the cached answer's JSON shape changes, so old entries are ignored.
-CACHE_FORMAT = "v2"  # v2: sql is pretty-printed
+CACHE_FORMAT = "v3"  # v2: sql is pretty-printed; v3: no one-bar charts
 
 
 def normalize_question(question: str) -> str:

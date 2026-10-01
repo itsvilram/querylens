@@ -13,14 +13,15 @@ from app.pipeline.visualize import MAX_BARS, Chart, chart_options, pick_chart
         (["int8"], 1, ["number", "table"]),  # "How many films are there?"
         (["numeric"], 1, ["number", "table"]),
         (["text"], 1, ["table"]),  # one word is not a number card
-        (["int8", "numeric"], 1, ["bar", "table"]),  # two numbers in one row: not a card
+        (["int8", "numeric"], 1, ["table"]),  # two numbers in one row: not a card
+        (["text", "numeric"], 1, ["table"]),  # "the top category": one bar compares nothing
         (["text", "numeric"], 16, ["bar", "table"]),  # revenue per category
         (["mpaa_rating", "int8"], 5, ["bar", "table"]),  # an enum is a category too
         (["int4", "numeric"], 2, ["bar", "table"]),  # store_id, revenue
         (["text", "numeric"], MAX_BARS + 1, ["table"]),  # too many bars to read
         (["date", "int8"], 12, ["line", "bar", "table"]),  # rentals per month
         (["timestamptz", "numeric"], 500, ["line", "table"]),
-        (["date", "int8"], 1, ["bar", "table"]),  # one point is not a line
+        (["date", "int8"], 1, ["table"]),  # one point is not a line, one bar not a chart
         (["text", "text"], 10, ["table"]),  # no numbers
         (["numeric", "text"], 10, ["table"]),  # the number must come after the label
         (["text", "money"], 10, ["table"]),  # money arrives as text ("$1.00")
